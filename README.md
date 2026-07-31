@@ -28,4 +28,6 @@
 
 ## 🚀 Быстрый запуск
 
-[📥 Скачачайте SupporTik v1.0.0 (RAR)](https://github.com/Legothommo/SupporTik/archive/refs/tags/1.0.0.zip) и запустите
+1. Скачайте архив [SupporTik_v1.0.0.zip](https://github.com/Legothommo/SupporTik/archive/refs/tags/1.0.0.zip).
+2. Распакуйте его в любую удобную папку.
+3. Запустите `SupporTik.exe`.
