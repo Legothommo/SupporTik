@@ -1,8 +1,11 @@
 ﻿using Hardcodet.Wpf.TaskbarNotification;
 using SupporTik.Classes;
 using SupporTik.Services;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 
@@ -21,8 +24,39 @@ namespace SupporTik
 		public static StorageService _storageService;
 		public static QuickTextWindow _quickMenu;
 
-		protected override void OnStartup(StartupEventArgs e)
+		private const string MutexName = "Global\\SupporTik_SingleInstance_Mutex_Guid";
+		private static Mutex _mutex;
+		private static bool _hasHandle = false;
+
+		protected override async void OnStartup(StartupEventArgs e)
 		{
+			_notifyIcon = (TaskbarIcon)Application.Current.FindResource("MyNotifyIcon");
+
+			try
+			{
+				// Запрашиваем владение мьютексом
+				_mutex = new Mutex(true, MutexName, out bool isNewInstance);
+				_hasHandle = isNewInstance;
+
+				if (!_hasHandle)
+				{
+					_notifyIcon.ShowBalloonTip(
+						"Предупреждение",
+						"Приложение уже запущено!",
+						BalloonIcon.Warning);
+
+					await Task.Delay(1000);
+
+					Shutdown();
+					return; // Важно: прерываем выполнение метода
+				}
+			}
+			catch (Exception ex)
+			{
+				// На случай проблем с правами доступа к системному мьютексу
+				_hasHandle = false;
+			}
+
 			base.OnStartup(e);
 
 			// Инициализируем сервисы
@@ -31,9 +65,13 @@ namespace SupporTik
 			_storageService = new StorageService();
 			_quickMenu = new QuickTextWindow();
 
-			_notifyIcon = (TaskbarIcon)Application.Current.FindResource("MyNotifyIcon");
-
 			RegisterDefaultHotkeys();
+
+			MainWindow mainWindow = new MainWindow();
+			if (!SupporTik.Properties.Settings.Default.StartMinimized)
+			{
+				mainWindow.Show();
+			}
 		}
 
 		private static void OnQuickMenuHotkeyPressed(List<BindKeys> keys)
@@ -88,9 +126,25 @@ namespace SupporTik
 				(ModifierKeys)SupporTik.Properties.Settings.Default.SelectedModifiers,
 				() => _pasteService.ReplaceSelectionInExternalApp());
 		}
-
 		protected override void OnExit(ExitEventArgs e)
 		{
+			if (_hasHandle && _mutex != null)
+			{
+				try
+				{
+					_mutex.ReleaseMutex();
+				}
+				catch (ApplicationException)
+				{
+					// Игнорируем, если поток уже завершился или потерял контекст владения
+				}
+				finally
+				{
+					_mutex.Close();
+					_mutex = null;
+				}
+			}
+
 			_storageService?.SaveData(_bindKeys);
 
 			// Чистим хоткеи при выходе из приложения

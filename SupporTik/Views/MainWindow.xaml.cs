@@ -19,11 +19,6 @@ namespace SupporTik
 			InitializeComponent();
 			Instance = this;
 
-			if (Properties.Settings.Default.StartMinimized)
-			{
-				this.Hide();
-			}
-
 			MainFrame.Navigate(new BindsPage());
 		}
 
