@@ -1,0 +1,84 @@
+{
+  "format": 1,
+  "restore": {
+    "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj": {}
+  },
+  "projects": {
+    "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj",
+        "projectName": "SupporTik",
+        "projectPath": "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj",
+        "packagesPath": "C:\\Users\\serenity\\.nuget\\packages\\",
+        "outputPath": "D:\\1 million project\\SupporTik\\SupporTik\\obj\\",
+        "projectStyle": "PackageReference",
+        "skipContentFileWrite": true,
+        "UsingMicrosoftNETSdk": false,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\serenity\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "framework": "net48",
+            "projectReferences": {}
+          }
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "framework": "net48",
+          "dependencies": {
+            "Hardcodet.NotifyIcon.Wpf": {
+              "target": "Package",
+              "version": "[2.0.1, )"
+            },
+            "InputSimulator": {
+              "target": "Package",
+              "version": "[1.0.4, )"
+            },
+            "NHotkey.Wpf": {
+              "target": "Package",
+              "version": "[4.0.0, )"
+            },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.4, )"
+            }
+          }
+        }
+      },
+      "runtimes": {
+        "win": {
+          "#import": []
+        },
+        "win-arm64": {
+          "#import": []
+        },
+        "win-x64": {
+          "#import": []
+        },
+        "win-x86": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

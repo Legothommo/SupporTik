@@ -1,0 +1,208 @@
+﻿<Page x:Class="SupporTik.Pages.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:SupporTik.Pages"
+      mc:Ignorable="d" 
+      d:DesignHeight="450" 
+      d:DesignWidth="800"
+      Title="SettingsPage">
+
+    <Page.Resources>
+        <!-- Стиль секции (карточки) -->
+        <Style x:Key="SettingsCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource BgSurface}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- Стиль подзаголовков секций -->
+        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AccentGreen}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <!-- Стиль описания настроек -->
+        <Style x:Key="SettingDescriptionStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" 
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24">
+
+            <!-- Заголовок страницы -->
+            <TextBlock Text="Настройки" 
+                       Foreground="{StaticResource TextPrimary}" 
+                       FontSize="22" 
+                       FontWeight="Bold" 
+                       Margin="0,0,0,20"/>
+
+            <!-- 1. Секция: Поведение и Запуск -->
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="ПОВЕДЕНИЕ И ЗАПУСК" 
+                               Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <!-- Автозапуск -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Запускать вместе с Windows" 
+                                       Foreground="{StaticResource TextPrimary}" 
+                                       FontSize="14"/>
+                            <TextBlock Text="Автоматический запуск программы при входе в систему" 
+                                       Style="{StaticResource SettingDescriptionStyle}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="ChkAutoStart" 
+                                  Grid.Column="1" 
+                                  VerticalAlignment="Center" 
+                                  Click="ChkAutoStart_Click"/>
+                    </Grid>
+
+                    <Separator Background="{StaticResource BorderColor}" 
+                               Margin="0,4,0,12"/>
+
+                    <!-- Сворачивание в трей при закрытии -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Сворачивать в трей при закрытии" 
+                                       Foreground="{StaticResource TextPrimary}" 
+                                       FontSize="14"/>
+                            <TextBlock Text="При нажатии на крестик окно будет скрываться в системный трей" 
+                                       Style="{StaticResource SettingDescriptionStyle}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="ChkMinimizeToTray" 
+                                  Grid.Column="1" 
+                                  VerticalAlignment="Center" 
+                                  IsChecked="True"/>
+                    </Grid>
+
+                    <Separator Background="{StaticResource BorderColor}" 
+                               Margin="0,4,0,12"/>
+
+                    <!-- Запуск свернутым -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Запускать в свернутом виде" 
+                                       Foreground="{StaticResource TextPrimary}" 
+                                       FontSize="14"/>
+                            <TextBlock Text="При старте приложения сразу скрывать его в трей" 
+                                       Style="{StaticResource SettingDescriptionStyle}"/>
+                        </StackPanel>
+                        <CheckBox x:Name="ChkStartMinimized" 
+                                  Grid.Column="1" 
+                                  VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 2. Секция: NDA Замена -->
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="NDA ЗАМЕНА" 
+                               Style="{StaticResource SectionHeaderStyle}"/>
+                    <StackPanel Margin="0,0,0,12">
+                        <TextBlock Text="Сочетание клавиш:" 
+                                   Foreground="{StaticResource TextSecondary}" 
+                                   FontSize="12" 
+                                   Margin="0,0,0,4"/>
+                        <Border x:Name="HotkeyCaptureArea" 
+                                Background="{StaticResource BgPrimary}" 
+                                BorderBrush="{StaticResource BorderColor}" 
+                                BorderThickness="1" 
+                                CornerRadius="6" 
+                                Padding="8"
+                                Focusable="True"
+                                MouseDown="HotkeyCaptureArea_MouseDown"
+                                KeyDown="HotkeyCaptureArea_KeyDown"
+                                PreviewKeyDown="HotkeyCaptureArea_PreviewKeyDown"
+                                LostFocus="HotkeyCaptureArea_LostFocus">
+                            <Grid>
+                                <TextBlock x:Name="TbHotkeyDisplay" 
+                                           Text="Нажмите для назначения..." 
+                                           HorizontalAlignment="Center" 
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource TextSecondary}" 
+                                           FontWeight="SemiBold"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 3. Секция: Импорт и Экспорт -->
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel>
+                    <TextBlock Text="ИМПОРТ И ЭКСПОРТ" 
+                               Style="{StaticResource SectionHeaderStyle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" 
+                                Content="Импорт"
+                                Margin="5,10"
+                                Height="30"
+                                Style="{StaticResource PrimaryBtnStyle}"
+                                Foreground="{StaticResource BgSurface}"
+                                FontWeight="Bold"
+                                Click="Import_Click"/>
+                        <Button Grid.Column="1" 
+                                Content="Экспорт"
+                                Margin="5,10"
+                                Height="30"
+                                Style="{StaticResource PrimaryBtnStyle}" 
+                                Background="{StaticResource AccentYellow}"              
+                                Foreground="{StaticResource BgSurface}"
+                                FontWeight="Bold"
+                                Click="Export_Click"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Кнопка сохранения -->
+            <Button x:Name="BtnSave" 
+                    Content="Сохранить настройки" 
+                    HorizontalAlignment="Right"
+                    Padding="16,8"
+                    Background="{StaticResource AccentGreen}"
+                    Foreground="{StaticResource BgSurface}"
+                    FontWeight="Bold"
+                    BorderThickness="0"
+                    Click="BtnSave_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

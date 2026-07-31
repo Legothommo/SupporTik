@@ -1,0 +1,158 @@
+﻿<Window x:Class="SupporTik.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:SupporTik"
+        mc:Ignorable="d"
+        Title="QuickPaste" 
+        Height="450" 
+        Width="650"
+        MinHeight="450"
+        MinWidth="650"
+        Background="{StaticResource BgPrimary}"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- Анимация ОТКРЫТИЯ меню -->
+        <Storyboard x:Key="OpenMenu">
+            <!-- Раскрываем ширину меню от 0 до 200 за 0.25 секунды -->
+            <DoubleAnimation Storyboard.TargetName="SideMenu"
+                             Storyboard.TargetProperty="Width"
+                             To="200" 
+                             Duration="0:0:0.25">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+
+            <!-- Плавное появление полупрозрачного фона -->
+            <DoubleAnimation Storyboard.TargetName="Overlay"
+                             Storyboard.TargetProperty="Opacity"
+                             To="0.5" 
+                             Duration="0:0:0.25"/>
+        </Storyboard>
+
+        <!-- Анимация ЗАКРЫТИЯ меню -->
+        <Storyboard x:Key="CloseMenu">
+            <DoubleAnimation Storyboard.TargetName="SideMenu"
+                             Storyboard.TargetProperty="Width"
+                             To="0" 
+                             Duration="0:0:0.2">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+
+            <DoubleAnimation Storyboard.TargetName="Overlay"
+                             Storyboard.TargetProperty="Opacity"
+                             To="0" 
+                             Duration="0:0:0.2"/>
+        </Storyboard>
+    </Window.Resources>
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="32" 
+                      ResizeBorderThickness="6" 
+                      GlassFrameThickness="0" 
+                      CornerRadius="8"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <!-- Основная область окна -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Кастомная шапка -->
+            <Grid Grid.Row="0" Background="{StaticResource BgSurface}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" 
+                            Orientation="Horizontal" 
+                            Margin="8,0">
+                    <Button x:Name="BtnBurger" 
+                            Content="☰" 
+                            Click="BtnBurger_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True"
+                            Style="{StaticResource TitleBarBtnStyle}" 
+                            FontSize="16"/>
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" 
+                           Text="SupporTik" 
+                           Foreground="{StaticResource TextPrimary}" 
+                           VerticalAlignment="Center" 
+                           HorizontalAlignment="Center" 
+                           Margin="12,0" 
+                           FontSize="16" 
+                           FontWeight="SemiBold"/>
+
+                <!-- Кнопки управления окном (IsHitTestVisibleInChrome для кликабельности) -->
+                <StackPanel Grid.Column="2" 
+                            Orientation="Horizontal" 
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button Content="—" Click="Minimize_Click" Style="{StaticResource TitleBarBtnStyle}"/>
+                    <Button Content="✕" Click="Close_Click" Style="{StaticResource TitleBarCloseBtnStyle}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Основной контент -->
+            <Frame x:Name="MainFrame" 
+                   Grid.Row="1" 
+                   NavigationUIVisibility="Hidden" 
+                   Margin="20"/>
+        </Grid>
+
+        <!-- Затемнение при открытом меню -->
+        <Border x:Name="Overlay" 
+                Background="Black" 
+                Opacity="0" 
+                IsHitTestVisible="False" 
+                MouseDown="Overlay_MouseDown"/>
+
+        <!-- ВЫДВИЖНОЕ МЕНЮ (SideMenu) -->
+        <Border x:Name="SideMenu" 
+                Width="0" 
+                HorizontalAlignment="Left" 
+                Background="{StaticResource BgSurface}" 
+                BorderBrush="{StaticResource BorderColor}" 
+                BorderThickness="0,0,1,0">
+            <Grid>
+                <StackPanel Margin="15">
+                    <TextBlock Text="МЕНЮ" 
+                               Foreground="{StaticResource TextSecondary}" 
+                               FontSize="16" 
+                               FontWeight="Bold" 
+                               Margin="0,0,0,15"/>
+
+                    <Button Content="📋 Все шаблоны" 
+                            Style="{StaticResource MenuBtnStyle}"
+                            Click="GoToBinds"/>
+                    <Button Content="⚙ Настройки" 
+                            Style="{StaticResource MenuBtnStyle}"
+                            Click="GoToSettings"/>
+
+                    <Separator/>
+
+                    <Button Content="ℹ О программе" 
+                            Style="{StaticResource MenuBtnStyle}"
+                            Click="GoToAbout"/>
+                </StackPanel>
+
+                <Label Content="Версия 0.1"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Bottom"
+                       Margin="10"
+                       Foreground="{StaticResource TextPrimary}"
+                       FontWeight="Light"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

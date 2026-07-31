@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "dgSpecHash": "zgef8Sw/GkM=",
+  "success": true,
+  "projectFilePath": "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\serenity\\.nuget\\packages\\hardcodet.notifyicon.wpf\\2.0.1\\hardcodet.notifyicon.wpf.2.0.1.nupkg.sha512",
+    "C:\\Users\\serenity\\.nuget\\packages\\inputsimulator\\1.0.4\\inputsimulator.1.0.4.nupkg.sha512",
+    "C:\\Users\\serenity\\.nuget\\packages\\newtonsoft.json\\13.0.4\\newtonsoft.json.13.0.4.nupkg.sha512",
+    "C:\\Users\\serenity\\.nuget\\packages\\nhotkey\\4.0.0\\nhotkey.4.0.0.nupkg.sha512",
+    "C:\\Users\\serenity\\.nuget\\packages\\nhotkey.wpf\\4.0.0\\nhotkey.wpf.4.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
