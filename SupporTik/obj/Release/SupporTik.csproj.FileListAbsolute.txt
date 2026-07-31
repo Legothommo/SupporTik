@@ -38,3 +38,43 @@ D:\1 million project\SupporTik\SupporTik\obj\Release\SupporTik.csproj.CoreCompil
 D:\1 million project\SupporTik\SupporTik\obj\Release\SupporTik.csproj.Up2Date
 D:\1 million project\SupporTik\SupporTik\obj\Release\SupporTik.exe
 D:\1 million project\SupporTik\SupporTik\obj\Release\SupporTik.pdb
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\SupporTik.exe.config
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\SupporTik.exe
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\SupporTik.pdb
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\Hardcodet.NotifyIcon.Wpf.dll
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\WindowsInput.dll
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\Newtonsoft.Json.dll
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\NHotkey.dll
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\NHotkey.pdb
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\NHotkey.Wpf.dll
+C:\Users\serenity\source\repos\SupporTik\SupporTik\bin\Release\NHotkey.Wpf.pdb
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.csproj.AssemblyReference.cache
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Styles\Colors.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Styles\ContextMenu.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Styles\Controls.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\App.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Controls\BindPanel.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Styles\ContextMenu.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Views\MainWindow.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Pages\AboutPage.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Views\BindCreateWindow.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Pages\BindsPage.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Pages\SettingsPage.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Views\QuickTextWindow.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\App.g.cs
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik_MarkupCompile.cache
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik_MarkupCompile.lref
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Controls\BindPanel.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Views\MainWindow.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Pages\AboutPage.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Views\BindCreateWindow.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Pages\BindsPage.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Pages\SettingsPage.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\Views\QuickTextWindow.baml
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.g.resources
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.Properties.Resources.resources
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.csproj.GenerateResource.cache
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.csproj.CoreCompileInputs.cache
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.csproj.Up2Date
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.exe
+C:\Users\serenity\source\repos\SupporTik\SupporTik\obj\Release\SupporTik.pdb

@@ -1,26 +1,22 @@
 {
   "format": 1,
   "restore": {
-    "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj": {}
+    "C:\\Users\\serenity\\source\\repos\\SupporTik\\SupporTik\\SupporTik.csproj": {}
   },
   "projects": {
-    "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj": {
+    "C:\\Users\\serenity\\source\\repos\\SupporTik\\SupporTik\\SupporTik.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj",
+        "projectUniqueName": "C:\\Users\\serenity\\source\\repos\\SupporTik\\SupporTik\\SupporTik.csproj",
         "projectName": "SupporTik",
-        "projectPath": "D:\\1 million project\\SupporTik\\SupporTik\\SupporTik.csproj",
+        "projectPath": "C:\\Users\\serenity\\source\\repos\\SupporTik\\SupporTik\\SupporTik.csproj",
         "packagesPath": "C:\\Users\\serenity\\.nuget\\packages\\",
-        "outputPath": "D:\\1 million project\\SupporTik\\SupporTik\\obj\\",
+        "outputPath": "C:\\Users\\serenity\\source\\repos\\SupporTik\\SupporTik\\obj\\",
         "projectStyle": "PackageReference",
         "skipContentFileWrite": true,
         "UsingMicrosoftNETSdk": false,
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
           "C:\\Users\\serenity\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
@@ -32,7 +28,6 @@
         },
         "frameworks": {
           "net48": {
-            "framework": "net48",
             "projectReferences": {}
           }
         },
@@ -44,7 +39,6 @@
       },
       "frameworks": {
         "net48": {
-          "framework": "net48",
           "dependencies": {
             "Hardcodet.NotifyIcon.Wpf": {
               "target": "Package",
