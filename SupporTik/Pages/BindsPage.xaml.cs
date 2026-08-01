@@ -50,7 +50,11 @@ namespace SupporTik.Pages
 		}
 		private void BtnAddBind(object sender, RoutedEventArgs e)
 		{
-			App._pasteService.IsPaused = true;
+			// Запоминаем состояние на случай, если пользователь уже поставил перехват на паузу
+			// вручную (через трей) — диалог не должен снимать эту паузу за него
+			bool wasPaused = App._pasteService.IsPaused;
+			App._pasteService.Pause();
+
 			var addWindow = new BindCreateWindow();
 			addWindow.Owner = MainWindow.Instance; // Привязываем к главному окну
 
@@ -69,7 +73,11 @@ namespace SupporTik.Pages
 				App.RegisterDefaultHotkeys();
 
 			}
-			App._pasteService.IsPaused = false;
+
+			if (!wasPaused)
+			{
+				App._pasteService.Start();
+			}
 		}
 		private void TbSearch_TextChanged(object sender, TextChangedEventArgs e)
 		{

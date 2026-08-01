@@ -135,8 +135,6 @@
                                 Padding="8"
                                 Focusable="True"
                                 MouseDown="HotkeyCaptureArea_MouseDown"
-                                KeyDown="HotkeyCaptureArea_KeyDown"
-                                PreviewKeyDown="HotkeyCaptureArea_PreviewKeyDown"
                                 LostFocus="HotkeyCaptureArea_LostFocus">
                             <Grid>
                                 <TextBlock x:Name="TbHotkeyDisplay" 

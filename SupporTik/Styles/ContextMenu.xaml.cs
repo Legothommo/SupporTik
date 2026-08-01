@@ -74,7 +74,14 @@ namespace SupporTik.Styles
 
 		private void EnableText(object sender, RoutedEventArgs e)
 		{
-			App._pasteService.IsPaused = !App._pasteService.IsPaused;
+			if (App._pasteService.IsPaused)
+			{
+				App._pasteService.Start();
+			}
+			else
+			{
+				App._pasteService.Pause();
+			}
 
 			var mainWindow = Application.Current.Windows.OfType<MainWindow>().FirstOrDefault();
 

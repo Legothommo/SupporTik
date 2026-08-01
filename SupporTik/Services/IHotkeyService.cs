@@ -9,21 +9,33 @@ namespace SupporTik.Services
 {
 	public interface IHotkeyService
 	{
-		/// <summary>
-		/// Пока true, хук не перехватывает и не "глотает" нажатия — используется, пока
-		/// пользователь захватывает новое сочетание клавиш в UI (иначе хук перехватит
-		/// нажатие раньше, чем оно дойдёт до окна приложения).
-		/// </summary>
-		bool IsSuspended { get; set; }
-
 		void RegisterHotkey(string name, Key key, ModifierKeys modifiers, Action action);
 		void UnregisterHotkey(string name);
 		void UnregisterAll();
+
+		/// <summary>
+		/// Начинает захват следующего нажатого сочетания клавиш напрямую через системный
+		/// хук — так нажатие достаётся нам раньше, чем его успеет перехватить чужая
+		/// программа через RegisterHotKey, и можно назначить даже сочетание, уже занятое
+		/// сторонним приложением. Захват одноразовый: после первого подходящего нажатия
+		/// (не одиночного модификатора) вызывается onCaptured и захват завершается сам.
+		/// </summary>
+		void StartCapture(Action<Key, ModifierKeys> onCaptured);
+
+		/// <summary>Отменяет активный захват без результата (например, элемент потерял фокус).</summary>
+		void CancelCapture();
 	}
 
 	public interface ITextPasteService
 	{
 		bool IsPaused { get; set; }
+
+		/// <summary>Возобновляет вставку текста и NDA-замену.</summary>
+		void Start();
+
+		/// <summary>Временно приостанавливает вставку текста и NDA-замену.</summary>
+		void Pause();
+
 		Task PasteText(string text);
 		Task ReplaceSelectionInExternalApp();
 	}

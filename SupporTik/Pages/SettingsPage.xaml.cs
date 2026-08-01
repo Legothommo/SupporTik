@@ -20,7 +20,6 @@ namespace SupporTik.Pages
 
 		private Key _selectedKey = Key.None;
 		private ModifierKeys _selectedModifiers = ModifierKeys.None;
-		private bool _isCapturing = false;
 
 		public SettingsPage()
 		{
@@ -46,19 +45,30 @@ namespace SupporTik.Pages
 
 		private void HotkeyCaptureArea_MouseDown(object sender, MouseButtonEventArgs e)
 		{
-			_isCapturing = true;
 			e.Handled = true;
-			App._hotkeyService.IsSuspended = true; // не даём хуку "проглотить" захватываемое сочетание
 			HotkeyCaptureArea.Focus();
 			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("AccentGreen");
 			TbHotkeyDisplay.Text = "Нажмите сочетание клавиш...";
 			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("AccentGreen");
+
+			// Захватываем сочетание напрямую через хук — так нажатие достаётся нам раньше,
+			// чем его успела бы перехватить сторонняя программа через RegisterHotKey
+			App._hotkeyService.StartCapture(OnHotkeyCaptured);
+		}
+
+		private void OnHotkeyCaptured(Key key, ModifierKeys modifiers)
+		{
+			_selectedModifiers = modifiers;
+			_selectedKey = key;
+
+			TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
+			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
 		}
 
 		private void HotkeyCaptureArea_LostFocus(object sender, RoutedEventArgs e)
 		{
-			_isCapturing = false;
-			App._hotkeyService.IsSuspended = false;
+			App._hotkeyService.CancelCapture();
 			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
 
 			if (_selectedKey != Key.None)
@@ -71,39 +81,6 @@ namespace SupporTik.Pages
 				TbHotkeyDisplay.Text = "Нажмите для назначения...";
 				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
 			}
-		}
-
-		private void HotkeyCaptureArea_PreviewKeyDown(object sender, KeyEventArgs e)
-		{
-			if (!_isCapturing) return;
-
-			e.Handled = true;
-
-			Key key = (e.Key == Key.System) ? e.SystemKey : e.Key;
-
-			// Игнорируем одиночные нажатия клавиш-модификаторов
-			if (key == Key.LeftCtrl || key == Key.RightCtrl ||
-				key == Key.LeftAlt || key == Key.RightAlt ||
-				key == Key.LeftShift || key == Key.RightShift ||
-				key == Key.LWin || key == Key.RWin)
-			{
-				return;
-			}
-
-			_selectedModifiers = Keyboard.Modifiers;
-			_selectedKey = key;
-
-			TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
-
-			_isCapturing = false;
-			App._hotkeyService.IsSuspended = false;
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
-		}
-
-		private void HotkeyCaptureArea_KeyDown(object sender, KeyEventArgs e)
-		{
-			if (_isCapturing) e.Handled = true;
 		}
 
 		#endregion

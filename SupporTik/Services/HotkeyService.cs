@@ -80,7 +80,8 @@ namespace SupporTik.Services
 		private readonly LowLevelKeyboardProc _hookProc;
 		private IntPtr _hookHandle = IntPtr.Zero;
 
-		public bool IsSuspended { get; set; }
+		// Пока задан — следующее подходящее нажатие уходит сюда вместо обычной обработки хоткеев
+		private Action<Key, ModifierKeys> _captureCallback;
 
 		public HotkeyService()
 		{
@@ -99,51 +100,94 @@ namespace SupporTik.Services
 
 		private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
 		{
-			if (nCode >= 0 && !IsSuspended)
+			if (nCode < 0)
 			{
-				int msg = wParam.ToInt32();
-				var hookStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));
-				Key key = KeyInterop.KeyFromVirtualKey((int)hookStruct.vkCode);
-
-				bool isDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
-				bool isUp = msg == WM_KEYUP || msg == WM_SYSKEYUP;
-
-				if ((isDown || isUp) && !IsModifierKey(key))
-				{
-					if (isUp)
-					{
-						lock (_lock)
-						{
-							_activeTriggerKeys.Remove(key);
-						}
-					}
-					else
-					{
-						ModifierKeys mods = GetCurrentModifiers();
-						HotkeyEntry match = FindMatch(key, mods);
-
-						if (match != null)
-						{
-							bool alreadyHeld;
-							lock (_lock)
-							{
-								alreadyHeld = !_activeTriggerKeys.Add(key);
-							}
-
-							if (!alreadyHeld)
-							{
-								match.Action?.Invoke();
-							}
-
-							// Не пропускаем нажатие дальше — ни в текущее окно, ни в другие
-							// приложения. Так наши бинды побеждают при совпадении хоткеев.
-							return (IntPtr)1;
-						}
-					}
-				}
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 			}
 
-			return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			int msg = wParam.ToInt32();
+			bool isDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+			bool isUp = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+
+			if (!isDown && !isUp)
+			{
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			}
+
+			var hookStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));
+			Key key = KeyInterop.KeyFromVirtualKey((int)hookStruct.vkCode);
+
+			if (IsModifierKey(key))
+			{
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			}
+
+			Action<Key, ModifierKeys> captureCallback;
+			lock (_lock)
+			{
+				captureCallback = _captureCallback;
+			}
+
+			if (captureCallback != null)
+			{
+				if (isDown)
+				{
+					ModifierKeys capturedMods = GetCurrentModifiers();
+					bool stillCapturing;
+
+					lock (_lock)
+					{
+						stillCapturing = _captureCallback != null;
+						if (stillCapturing)
+						{
+							_captureCallback = null;
+						}
+					}
+
+					if (stillCapturing)
+					{
+						captureCallback(key, capturedMods);
+					}
+				}
+
+				// Глотаем и нажатие, и отпускание — во время захвата сочетание не должно
+				// уходить ни в текущее окно, ни в другие приложения (в т.ч. те, что могли
+				// зарегистрировать его через RegisterHotKey раньше нас)
+				return (IntPtr)1;
+			}
+
+			if (isUp)
+			{
+				lock (_lock)
+				{
+					_activeTriggerKeys.Remove(key);
+				}
+
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			}
+
+			ModifierKeys mods = GetCurrentModifiers();
+			HotkeyEntry match = FindMatch(key, mods);
+
+			if (match == null)
+			{
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			}
+
+			bool alreadyHeld;
+			lock (_lock)
+			{
+				alreadyHeld = !_activeTriggerKeys.Add(key);
+			}
+
+			if (!alreadyHeld)
+			{
+				match.Action?.Invoke();
+			}
+
+			// Не пропускаем нажатие дальше — ни в текущее окно, ни в другие приложения.
+			// Так наши бинды побеждают при совпадении хоткеев.
+			return (IntPtr)1;
 		}
 
 		private HotkeyEntry FindMatch(Key key, ModifierKeys mods)
@@ -216,6 +260,22 @@ namespace SupporTik.Services
 			{
 				_hotkeysByName.Clear();
 				_activeTriggerKeys.Clear();
+			}
+		}
+
+		public void StartCapture(Action<Key, ModifierKeys> onCaptured)
+		{
+			lock (_lock)
+			{
+				_captureCallback = onCaptured;
+			}
+		}
+
+		public void CancelCapture()
+		{
+			lock (_lock)
+			{
+				_captureCallback = null;
 			}
 		}
 

@@ -61,7 +61,10 @@ namespace SupporTik.Controls
 
 		private void EditHotkey_Click(object sender, RoutedEventArgs e)
 		{
-			App._pasteService.IsPaused = true;
+			// Запоминаем состояние на случай, если пользователь уже поставил перехват на паузу
+			// вручную (через трей) — диалог не должен снимать эту паузу за него
+			bool wasPaused = App._pasteService.IsPaused;
+			App._pasteService.Pause();
 
 			var addWindow = new BindCreateWindow(_bind)
 			{
@@ -83,7 +86,10 @@ namespace SupporTik.Controls
 				App.RegisterDefaultHotkeys();
 			}
 
-			App._pasteService.IsPaused = false;
+			if (!wasPaused)
+			{
+				App._pasteService.Start();
+			}
 
 			// Оповещаем родительский View (Page) об обновлении UI
 			ItemDeleted?.Invoke(this, EventArgs.Empty);
