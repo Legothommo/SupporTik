@@ -32,12 +32,19 @@
                               ShadowDepth="3"/>
         </Border.Effect>
 
-        <ScrollViewer VerticalScrollBarVisibility="Hidden">
-            <StackPanel x:Name="sp_binds" 
-                        Width="220">
-                <!-- Пример списка быстрых шаблонов -->
-                <Separator Style="{StaticResource TraySeparatorStyle}"/>
-            </StackPanel>
-        </ScrollViewer>
+        <StackPanel Width="220">
+            <!-- Название папки (если задано) -->
+            <TextBlock x:Name="TbGroupTitle"
+                       Foreground="{StaticResource TextSecondary}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       Margin="10,4,10,4"
+                       TextTrimming="CharacterEllipsis"
+                       Visibility="Collapsed"/>
+
+            <ScrollViewer VerticalScrollBarVisibility="Hidden">
+                <StackPanel x:Name="sp_binds"/>
+            </ScrollViewer>
+        </StackPanel>
     </Border>
 </Window>

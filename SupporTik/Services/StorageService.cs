@@ -10,20 +10,20 @@ namespace SupporTik.Services
 {
 	public class StorageService
 	{
+		private const string DefaultFileName = "keybinds.json";
+
 		private readonly string _folderPath;
-		private readonly string _filePath;
 
 		public StorageService()
 		{
 			// Путь к AppData\Roaming\SupporTik
 			string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 			_folderPath = Path.Combine(appDataPath, "SupporTik");
-			_filePath = Path.Combine(_folderPath, "keybinds.json");
 		}
 
 		#region Работа с локальным файлом (AppData)
 
-		public void SaveData<T>(List<T> data)
+		public void SaveData<T>(List<T> data, string fileName = DefaultFileName)
 		{
 			try
 			{
@@ -32,8 +32,9 @@ namespace SupporTik.Services
 					Directory.CreateDirectory(_folderPath);
 				}
 
+				string filePath = Path.Combine(_folderPath, fileName);
 				string jsonString = JsonConvert.SerializeObject(data, Formatting.Indented);
-				File.WriteAllText(_filePath, jsonString);
+				File.WriteAllText(filePath, jsonString);
 			}
 			catch (Exception ex)
 			{
@@ -41,16 +42,17 @@ namespace SupporTik.Services
 			}
 		}
 
-		public List<T> LoadData<T>()
+		public List<T> LoadData<T>(string fileName = DefaultFileName)
 		{
 			try
 			{
-				if (!File.Exists(_filePath))
+				string filePath = Path.Combine(_folderPath, fileName);
+				if (!File.Exists(filePath))
 				{
 					return new List<T>();
 				}
 
-				string jsonString = File.ReadAllText(_filePath);
+				string jsonString = File.ReadAllText(filePath);
 				return JsonConvert.DeserializeObject<List<T>>(jsonString) ?? new List<T>();
 			}
 			catch (Exception ex)

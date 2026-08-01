@@ -18,6 +18,7 @@ namespace SupporTik
 	{
 		public static TaskbarIcon _notifyIcon;
 		public static List<BindKeys> _bindKeys;
+		public static List<BindGroupInfo> _groupInfos;
 
 		public static IHotkeyService _hotkeyService;
 		public static ITextPasteService _pasteService;
@@ -63,6 +64,7 @@ namespace SupporTik
 			_pasteService = new TextPasteService();
 			_hotkeyService = new HotkeyService();
 			_storageService = new StorageService();
+			_groupInfos = _storageService.LoadData<BindGroupInfo>("groups.json");
 			_quickMenu = new QuickTextWindow();
 
 			RegisterDefaultHotkeys();
@@ -79,7 +81,10 @@ namespace SupporTik
 			// Вызываем показ окна возле мыши
 			if (!_pasteService.IsPaused)
 			{
-				_quickMenu.SetEntries(BuildQuickMenuEntries(keys));
+				var firstBind = keys[0];
+				string groupTitle = GetGroupName(firstBind.Key, firstBind.Modifiers);
+
+				_quickMenu.SetEntries(groupTitle, BuildQuickMenuEntries(keys));
 				_quickMenu.ShowAtCursor();
 			}
 		}
@@ -116,6 +121,35 @@ namespace SupporTik
 			}
 
 			return entries;
+		}
+
+		/// <summary>Название группы биндов с общим сочетанием клавиш, если пользователь его задал.</summary>
+		public static string GetGroupName(Key key, ModifierKeys modifiers)
+		{
+			return _groupInfos.FirstOrDefault(g => g.Key == key && g.Modifiers == modifiers)?.Name;
+		}
+
+		public static void SetGroupName(Key key, ModifierKeys modifiers, string name)
+		{
+			var existing = _groupInfos.FirstOrDefault(g => g.Key == key && g.Modifiers == modifiers);
+
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				if (existing != null)
+				{
+					_groupInfos.Remove(existing);
+				}
+			}
+			else if (existing != null)
+			{
+				existing.Name = name.Trim();
+			}
+			else
+			{
+				_groupInfos.Add(new BindGroupInfo { Key = key, Modifiers = modifiers, Name = name.Trim() });
+			}
+
+			_storageService.SaveData(_groupInfos, "groups.json");
 		}
 
 		public static void RegisterDefaultHotkeys()

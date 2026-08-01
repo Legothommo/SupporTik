@@ -33,15 +33,29 @@ namespace SupporTik.Pages
 		{
 			sp_list.Children.Clear();
 
-			var sortedBinds = App._bindKeys.OrderBy(b => b.Modifiers).ThenBy(b => b.Key);
+			var groups = App._bindKeys
+				.GroupBy(b => new { b.Key, b.Modifiers })
+				.OrderBy(g => g.Key.Modifiers)
+				.ThenBy(g => g.Key.Key);
 
-			foreach (var bind in sortedBinds)
+			foreach (var group in groups)
 			{
-				var panel = new BindPanel(bind);
+				var binds = group.ToList();
 
-				panel.ItemDeleted += BindPanel_ItemDeleted;
-				sp_list.Children.Add(panel);
-
+				if (binds.Count == 1)
+				{
+					var panel = new BindPanel(binds[0]);
+					panel.ItemDeleted += BindPanel_ItemDeleted;
+					sp_list.Children.Add(panel);
+				}
+				else
+				{
+					// Несколько шаблонов на одном сочетании клавиш — показываем одним блоком,
+					// а не отдельными карточками с повторяющимся хоткеем
+					var groupPanel = new BindGroupPanel(binds);
+					groupPanel.ItemDeleted += BindPanel_ItemDeleted;
+					sp_list.Children.Add(groupPanel);
+				}
 			}
 		}
 		private void BindPanel_ItemDeleted(object sender, EventArgs e)
@@ -85,7 +99,7 @@ namespace SupporTik.Pages
 
 			foreach (var child in sp_list.Children)
 			{
-				if (child is BindPanel card) // ваш UserControl карточки
+				if (child is BindPanel card)
 				{
 					// Проверяем, содержится ли поиск в свойствах вашей карточки/модели
 					bool isVisible = string.IsNullOrWhiteSpace(query) ||
@@ -94,6 +108,10 @@ namespace SupporTik.Pages
 
 					// Скрываем или показываем карточку
 					card.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+				}
+				else if (child is BindGroupPanel group)
+				{
+					group.Visibility = group.Matches(query) ? Visibility.Visible : Visibility.Collapsed;
 				}
 			}
 		}

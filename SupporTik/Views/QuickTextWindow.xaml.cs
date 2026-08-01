@@ -39,8 +39,19 @@ namespace SupporTik
 		/// это может быть вставка шаблона, NDA-замена или что угодно ещё; вся эта
 		/// логика собирается в App.BuildQuickMenuEntries.
 		/// </summary>
-		public void SetEntries(List<QuickMenuEntry> entries)
+		/// <param name="groupTitle">Название папки, если пользователь его задал (иначе null/пусто — заголовок скрыт).</param>
+		public void SetEntries(string groupTitle, List<QuickMenuEntry> entries)
 		{
+			if (string.IsNullOrEmpty(groupTitle))
+			{
+				TbGroupTitle.Visibility = Visibility.Collapsed;
+			}
+			else
+			{
+				TbGroupTitle.Text = "📁 " + groupTitle;
+				TbGroupTitle.Visibility = Visibility.Visible;
+			}
+
 			sp_binds.Children.Clear();
 
 			bool separatorAdded = false;

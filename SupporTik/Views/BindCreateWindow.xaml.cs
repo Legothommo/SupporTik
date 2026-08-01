@@ -20,21 +20,30 @@ namespace SupporTik.Pages
 		private ModifierKeys _selectedModifiers = ModifierKeys.None;
 		private readonly BindKeys _editingBind;
 
-		public BindCreateWindow(BindKeys bind = null)
+		/// <param name="bind">Редактируемый бинд, либо (при presetHotkeyOnly) только источник сочетания клавиш.</param>
+		/// <param name="presetHotkeyOnly">
+		/// true — не редактирование, а добавление нового шаблона с уже готовым сочетанием
+		/// клавиш (например, "+ Добавить шаблон" внутри группы биндов с общим хоткеем).
+		/// </param>
+		public BindCreateWindow(BindKeys bind = null, bool presetHotkeyOnly = false)
 		{
 			InitializeComponent();
-			_editingBind = bind;
 
-			if (_editingBind != null)
+			if (bind != null && !presetHotkeyOnly)
 			{
-				TbName.Text = _editingBind.Name;
-				_selectedKey = _editingBind.Key;
-				_selectedModifiers = _editingBind.Modifiers;
+				_editingBind = bind;
+				TbName.Text = bind.Name;
+				TbText.Text = bind.Text;
+				TbLabel.Text = "✨ Изменение бинда";
+			}
+
+			if (bind != null)
+			{
+				_selectedKey = bind.Key;
+				_selectedModifiers = bind.Modifiers;
 
 				TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
 				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextPrimary");
-				TbText.Text = _editingBind.Text;
-				TbLabel.Text = "✨ Изменение бинда";
 			}
 		}
 

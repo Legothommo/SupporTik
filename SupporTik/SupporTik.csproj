@@ -59,9 +59,13 @@
     </ApplicationDefinition>
     <Compile Include="Models\BindKeys.cs" />
     <Compile Include="Models\QuickMenuEntry.cs" />
+    <Compile Include="Models\BindGroupInfo.cs" />
     <Compile Include="Helpers\KeyExtensions.cs" />
     <Compile Include="Controls\BindPanel.xaml.cs">
       <DependentUpon>BindPanel.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\BindGroupPanel.xaml.cs">
+      <DependentUpon>BindGroupPanel.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\AboutPage.xaml.cs">
       <DependentUpon>AboutPage.xaml</DependentUpon>
@@ -87,6 +91,10 @@
     <Compile Include="Services\StorageService.cs" />
     <Compile Include="Services\TextPasteService.cs" />
     <Page Include="Controls\BindPanel.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Controls\BindGroupPanel.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
