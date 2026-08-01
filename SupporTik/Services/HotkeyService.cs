@@ -1,8 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Windows.Input;
+﻿using Hardcodet.Wpf.TaskbarNotification;
 using NHotkey;
 using NHotkey.Wpf;
+using SupporTik.Classes;
+using System;
+using System.Collections.Generic;
+using System.Windows.Input;
 
 namespace SupporTik.Services
 {
@@ -24,8 +26,11 @@ namespace SupporTik.Services
 			}
 			catch (HotkeyAlreadyRegisteredException)
 			{
-				// Игнорируем, если хоткей уже зарегистрирован в системе
-			}
+                App._notifyIcon?.ShowBalloonTip(
+                    "Ошибка",
+                    $"Сочетание клавиш {KeyExtensions.ToFriendlyShortcut(modifiers, key)} уже используется сторонней программой!",
+                    BalloonIcon.Warning);
+            }
 		}
 
 		public void UnregisterHotkey(string name)
