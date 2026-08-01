@@ -58,6 +58,7 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Models\BindKeys.cs" />
+    <Compile Include="Models\QuickMenuEntry.cs" />
     <Compile Include="Helpers\KeyExtensions.cs" />
     <Compile Include="Controls\BindPanel.xaml.cs">
       <DependentUpon>BindPanel.xaml</DependentUpon>

@@ -79,9 +79,43 @@ namespace SupporTik
 			// Вызываем показ окна возле мыши
 			if (!_pasteService.IsPaused)
 			{
-				_quickMenu.SetBinds(keys);
+				_quickMenu.SetEntries(BuildQuickMenuEntries(keys));
 				_quickMenu.ShowAtCursor();
 			}
+		}
+
+		/// <summary>
+		/// Собирает пункты всплывающего меню для группы биндов с общим сочетанием клавиш.
+		/// QuickTextWindow сам ничего не знает про BindKeys/настройки — вся эта логика здесь.
+		/// </summary>
+		private static List<QuickMenuEntry> BuildQuickMenuEntries(List<BindKeys> binds)
+		{
+			var entries = binds
+				.Select(bind => new QuickMenuEntry
+				{
+					Name = bind.Name,
+					Action = () => _pasteService.PasteText(bind.Text)
+				})
+				.ToList();
+
+			// Если это сочетание совпадает с хоткеем NDA-замены — прямой хоткей для него
+			// не сработает (см. RegisterDefaultHotkeys), поэтому даём доступ к нему отсюда
+			var firstBind = binds[0];
+			bool matchesNdaHotkey =
+				firstBind.Key == (Key)SupporTik.Properties.Settings.Default.SelectedKey &&
+				firstBind.Modifiers == (ModifierKeys)SupporTik.Properties.Settings.Default.SelectedModifiers;
+
+			if (matchesNdaHotkey)
+			{
+				entries.Add(new QuickMenuEntry
+				{
+					Name = "NDA Замена",
+					Action = () => _pasteService.ReplaceSelectionInExternalApp(),
+					IsSpecial = true
+				});
+			}
+
+			return entries;
 		}
 
 		public static void RegisterDefaultHotkeys()

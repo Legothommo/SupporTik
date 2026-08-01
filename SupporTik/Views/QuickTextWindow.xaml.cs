@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Interop;
 using SupporTik.Classes;
 using SupporTik.Services;
@@ -35,60 +34,46 @@ namespace SupporTik
 
 		#region Инициализация элементов списка
 
-		public void SetBinds(List<BindKeys> bindKeys)
+		/// <summary>
+		/// Рисует список пунктов меню. Окно не знает, что стоит за каждым пунктом —
+		/// это может быть вставка шаблона, NDA-замена или что угодно ещё; вся эта
+		/// логика собирается в App.BuildQuickMenuEntries.
+		/// </summary>
+		public void SetEntries(List<QuickMenuEntry> entries)
 		{
 			sp_binds.Children.Clear();
 
-			foreach (BindKeys bindKey in bindKeys)
+			bool separatorAdded = false;
+
+			foreach (QuickMenuEntry entry in entries)
 			{
-				Button button = new Button();
+				if (entry.IsSpecial && !separatorAdded)
+				{
+					sp_binds.Children.Add(new Separator
+					{
+						Style = (Style)Application.Current.FindResource("TraySeparatorStyle")
+					});
+					separatorAdded = true;
+				}
 
 				// Обрезаем длинное имя
-				string name = bindKey.Name.Length > 15
-					? bindKey.Name.Substring(0, 14) + "..."
-					: bindKey.Name;
-
-				button.Content = name;
-				button.Style = (Style)Application.Current.FindResource("MenuBtnStyle");
-				button.Click += (sender, e) => TemplateClick(bindKey);
-
-				sp_binds.Children.Add(button);
-			}
-
-			Key key = (Key)Properties.Settings.Default.SelectedKey;
-			ModifierKeys mod = (ModifierKeys)Properties.Settings.Default.SelectedModifiers;
-
-			// Проверяем наличие сочетания для NDA замены
-			if (bindKeys.Exists(x => x.Key == key && x.Modifiers == mod))
-			{
-				Separator separator = new Separator
-				{
-					Style = (Style)Application.Current.FindResource("TraySeparatorStyle")
-				};
+				string name = entry.Name.Length > 15
+					? entry.Name.Substring(0, 14) + "..."
+					: entry.Name;
 
 				Button button = new Button
 				{
-					Content = "NDA Замена",
+					Content = name,
 					Style = (Style)Application.Current.FindResource("MenuBtnStyle")
 				};
 
 				button.Click += (sender, e) =>
 				{
-					App._pasteService?.ReplaceSelectionInExternalApp();
+					entry.Action?.Invoke();
 					Hide();
 				};
 
-				sp_binds.Children.Add(separator);
 				sp_binds.Children.Add(button);
-			}
-		}
-
-		private void TemplateClick(BindKeys bindKey)
-		{
-			if (App._pasteService != null && bindKey != null)
-			{
-				App._pasteService.PasteText(bindKey.Text);
-				this.Hide();
 			}
 		}
 
