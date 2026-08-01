@@ -45,6 +45,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
@@ -60,6 +61,7 @@
     <Compile Include="Models\BindKeys.cs" />
     <Compile Include="Models\QuickMenuEntry.cs" />
     <Compile Include="Models\BindGroupInfo.cs" />
+    <Compile Include="Models\ExportPackage.cs" />
     <Compile Include="Helpers\KeyExtensions.cs" />
     <Compile Include="Controls\BindPanel.xaml.cs">
       <DependentUpon>BindPanel.xaml</DependentUpon>

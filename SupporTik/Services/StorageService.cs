@@ -74,18 +74,31 @@ namespace SupporTik.Services
 				{
 					Filter = "JSON Files (*.json)|*.json",
 					DefaultExt = "json",
-					FileName = "SupporTik_Binds.json",
-					Title = "Экспорт биндов"
+					FileName = "SupporTik_Export.json",
+					Title = "Экспорт биндов, групп и настроек"
 				};
 
 				if (saveFileDialog.ShowDialog() == true)
 				{
-					string json = JsonConvert.SerializeObject(App._bindKeys, Formatting.Indented);
+					var package = new ExportPackage
+					{
+						Binds = App._bindKeys,
+						Groups = App._groupInfos,
+						Settings = new ExportSettings
+						{
+							StartMinimized = Properties.Settings.Default.StartMinimized,
+							MinimizeToTray = Properties.Settings.Default.MinimizeToTray,
+							SelectedKey = Properties.Settings.Default.SelectedKey,
+							SelectedModifiers = Properties.Settings.Default.SelectedModifiers
+						}
+					};
+
+					string json = JsonConvert.SerializeObject(package, Formatting.Indented);
 					File.WriteAllText(saveFileDialog.FileName, json);
 
 					App._notifyIcon?.ShowBalloonTip(
 						"Экспорт",
-						"Бинды успешно сохранены!",
+						"Бинды, группы и настройки успешно сохранены!",
 						BalloonIcon.None);
 				}
 			}
@@ -106,25 +119,60 @@ namespace SupporTik.Services
 				{
 					Filter = "JSON Files (*.json)|*.json",
 					DefaultExt = "json",
-					Title = "Выберите файл биндов"
+					Title = "Выберите файл для импорта"
 				};
 
-				if (openFileDialog.ShowDialog() == true)
+				if (openFileDialog.ShowDialog() != true)
 				{
-					string json = File.ReadAllText(openFileDialog.FileName);
-					var importedBinds = JsonConvert.DeserializeObject<List<BindKeys>>(json);
-
-					if (importedBinds != null)
-					{
-						App._bindKeys = importedBinds;
-						SaveData(App._bindKeys); // Сохраняем импортированные бинды локально
-
-						App._notifyIcon?.ShowBalloonTip(
-							"Импорт",
-							"Бинды успешно импортированы!",
-							BalloonIcon.None);
-					}
+					return;
 				}
+
+				string json = File.ReadAllText(openFileDialog.FileName);
+				ExportPackage package = null;
+
+				try
+				{
+					package = JsonConvert.DeserializeObject<ExportPackage>(json);
+				}
+				catch (JsonException)
+				{
+					// Старый формат экспорта — просто список биндов, без групп и настроек.
+					// package остаётся null, ниже сработает запасной путь.
+				}
+
+				List<BindKeys> importedBinds = package?.Binds
+					?? JsonConvert.DeserializeObject<List<BindKeys>>(json);
+
+				if (importedBinds == null)
+				{
+					throw new InvalidOperationException("Файл не похож на экспорт SupporTik");
+				}
+
+				App._bindKeys = importedBinds;
+				SaveData(App._bindKeys);
+
+				if (package?.Groups != null)
+				{
+					App._groupInfos = package.Groups;
+					SaveData(App._groupInfos, "groups.json");
+				}
+
+				if (package?.Settings != null)
+				{
+					Properties.Settings.Default.StartMinimized = package.Settings.StartMinimized;
+					Properties.Settings.Default.MinimizeToTray = package.Settings.MinimizeToTray;
+					Properties.Settings.Default.SelectedKey = package.Settings.SelectedKey;
+					Properties.Settings.Default.SelectedModifiers = package.Settings.SelectedModifiers;
+					Properties.Settings.Default.Save();
+				}
+
+				// Перерегистрируем хоткеи под импортированные бинды/настройки
+				App.RegisterDefaultHotkeys();
+
+				App._notifyIcon?.ShowBalloonTip(
+					"Импорт",
+					"Данные успешно импортированы!",
+					BalloonIcon.None);
 			}
 			catch (Exception)
 			{

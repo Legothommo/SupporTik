@@ -25,13 +25,7 @@ namespace SupporTik.Pages
 		{
 			InitializeComponent();
 			LoadSettings();
-
-			if (Properties.Settings.Default.SelectedKey != 0 && (ModifierKeys)Properties.Settings.Default.SelectedModifiers != 0)
-			{
-				_selectedKey = (Key)Properties.Settings.Default.SelectedKey;
-				_selectedModifiers = (ModifierKeys)Properties.Settings.Default.SelectedModifiers;
-				TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-			}
+			LoadHotkeyDisplay();
 		}
 
 		private void LoadSettings()
@@ -39,6 +33,22 @@ namespace SupporTik.Pages
 			ChkAutoStart.IsChecked = IsInAutoStart();
 			ChkMinimizeToTray.IsChecked = Properties.Settings.Default.MinimizeToTray;
 			ChkStartMinimized.IsChecked = Properties.Settings.Default.StartMinimized;
+		}
+
+		private void LoadHotkeyDisplay()
+		{
+			if (Properties.Settings.Default.SelectedKey != 0 && (ModifierKeys)Properties.Settings.Default.SelectedModifiers != 0)
+			{
+				_selectedKey = (Key)Properties.Settings.Default.SelectedKey;
+				_selectedModifiers = (ModifierKeys)Properties.Settings.Default.SelectedModifiers;
+				TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
+			}
+			else
+			{
+				_selectedKey = Key.None;
+				_selectedModifiers = ModifierKeys.None;
+				TbHotkeyDisplay.Text = "Нажмите для назначения...";
+			}
 		}
 
 		#region Обработка захвата Хоткея (NDA Замена)
@@ -184,6 +194,10 @@ namespace SupporTik.Pages
 		private void Import_Click(object sender, RoutedEventArgs e)
 		{
 			App._storageService.ImportData();
+
+			// Импорт мог изменить настройки/хоткей NDA-замены — обновляем то, что показано на экране
+			LoadSettings();
+			LoadHotkeyDisplay();
 		}
 
 		#endregion
