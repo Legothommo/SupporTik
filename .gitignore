@@ -1,9 +1,10 @@
 ## Visual Studio / C#
 [Bb]in/
-[Ob]j/
+[Oo]bj/
 .vs/
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
 packages/
+MigrationBackup/
