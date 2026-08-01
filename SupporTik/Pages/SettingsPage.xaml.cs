@@ -48,6 +48,7 @@ namespace SupporTik.Pages
 		{
 			_isCapturing = true;
 			e.Handled = true;
+			App._hotkeyService.IsSuspended = true; // не даём хуку "проглотить" захватываемое сочетание
 			HotkeyCaptureArea.Focus();
 			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("AccentGreen");
 			TbHotkeyDisplay.Text = "Нажмите сочетание клавиш...";
@@ -57,6 +58,7 @@ namespace SupporTik.Pages
 		private void HotkeyCaptureArea_LostFocus(object sender, RoutedEventArgs e)
 		{
 			_isCapturing = false;
+			App._hotkeyService.IsSuspended = false;
 			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
 
 			if (_selectedKey != Key.None)
@@ -95,6 +97,7 @@ namespace SupporTik.Pages
 			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
 
 			_isCapturing = false;
+			App._hotkeyService.IsSuspended = false;
 			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
 		}
 

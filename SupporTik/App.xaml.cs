@@ -149,6 +149,7 @@ namespace SupporTik
 
 			// Чистим хоткеи при выходе из приложения
 			_hotkeyService?.UnregisterAll();
+			(_hotkeyService as IDisposable)?.Dispose();
 
 			base.OnExit(e);
 		}
