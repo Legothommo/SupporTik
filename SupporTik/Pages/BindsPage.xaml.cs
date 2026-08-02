@@ -119,12 +119,12 @@ namespace SupporTik.Pages
 		{
 			if (!isEnabled)
 			{
-				Status.Fill = (Brush)Application.Current.FindResource("AccentGreen");
+				Status.Fill = (Brush)FindResource("StatusActiveBrush");
 				TbText.Text = "Перехват клавиш активен";
 			}
 			else
 			{
-				Status.Fill = (Brush)Application.Current.FindResource("AccentCoral");
+				Status.Fill = (Brush)FindResource("StatusPausedBrush");
 				TbText.Text = "Перехват клавиш выключен";
 			}
 		}

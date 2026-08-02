@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using SupporTik.Classes;
 using SupporTik.Services;
+using UiButton = Wpf.Ui.Controls.Button;
 
 namespace SupporTik
 {
@@ -72,10 +73,13 @@ namespace SupporTik
 					? entry.Name.Substring(0, 14) + "..."
 					: entry.Name;
 
-				Button button = new Button
+				UiButton button = new UiButton
 				{
 					Content = name,
-					Style = (Style)Application.Current.FindResource("MenuBtnStyle")
+					Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent,
+					HorizontalContentAlignment = HorizontalAlignment.Left,
+					HorizontalAlignment = HorizontalAlignment.Stretch,
+					Margin = new Thickness(0, 2, 0, 2)
 				};
 
 				button.Click += (sender, e) =>

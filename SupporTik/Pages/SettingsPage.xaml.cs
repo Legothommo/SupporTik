@@ -57,9 +57,9 @@ namespace SupporTik.Pages
 		{
 			e.Handled = true;
 			HotkeyCaptureArea.Focus();
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("AccentGreen");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("StatusActiveBrush");
 			TbHotkeyDisplay.Text = "Нажмите сочетание клавиш...";
-			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("AccentGreen");
+			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("StatusActiveBrush");
 
 			// Захватываем сочетание напрямую через хук — так нажатие достаётся нам раньше,
 			// чем его успела бы перехватить сторонняя программа через RegisterHotKey
@@ -72,24 +72,24 @@ namespace SupporTik.Pages
 			_selectedKey = key;
 
 			TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
+			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderSubtleBrush");
 		}
 
 		private void HotkeyCaptureArea_LostFocus(object sender, RoutedEventArgs e)
 		{
 			App._hotkeyService.CancelCapture();
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderSubtleBrush");
 
 			if (_selectedKey != Key.None)
 			{
 				TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
+				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush");
 			}
 			else
 			{
 				TbHotkeyDisplay.Text = "Нажмите для назначения...";
-				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
+				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush");
 			}
 		}
 

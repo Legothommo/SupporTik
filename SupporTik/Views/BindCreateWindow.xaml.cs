@@ -34,7 +34,7 @@ namespace SupporTik.Pages
 				_editingBind = bind;
 				TbName.Text = bind.Name;
 				TbText.Text = bind.Text;
-				TbLabel.Text = "✨ Изменение бинда";
+				TbLabel.Text = "Изменение бинда";
 			}
 
 			if (bind != null)
@@ -43,7 +43,7 @@ namespace SupporTik.Pages
 				_selectedModifiers = bind.Modifiers;
 
 				TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextPrimary");
+				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorPrimaryBrush");
 			}
 		}
 
@@ -52,9 +52,9 @@ namespace SupporTik.Pages
 		private void HotkeyCaptureArea_MouseDown(object sender, MouseButtonEventArgs e)
 		{
 			HotkeyCaptureArea.Focus();
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("AccentGreen");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("StatusActiveBrush");
 			TbHotkeyDisplay.Text = "Нажмите сочетание клавиш...";
-			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("AccentGreen");
+			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("StatusActiveBrush");
 
 			// Захватываем сочетание напрямую через хук — так нажатие достаётся нам раньше,
 			// чем его успела бы перехватить сторонняя программа через RegisterHotKey
@@ -67,24 +67,24 @@ namespace SupporTik.Pages
 			_selectedKey = key;
 
 			TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextPrimary");
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
+			TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorPrimaryBrush");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderSubtleBrush");
 		}
 
 		private void HotkeyCaptureArea_LostFocus(object sender, RoutedEventArgs e)
 		{
 			App._hotkeyService.CancelCapture();
-			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderColor");
+			HotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderSubtleBrush");
 
 			if (_selectedKey != Key.None)
 			{
 				TbHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_selectedModifiers, _selectedKey);
-				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextPrimary");
+				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorPrimaryBrush");
 			}
 			else
 			{
 				TbHotkeyDisplay.Text = "Нажмите, чтобы задать хоткей...";
-				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
+				TbHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush");
 			}
 		}
 

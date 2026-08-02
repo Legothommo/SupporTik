@@ -175,6 +175,9 @@
     <Resource Include="Assets\app_icon.ico" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="WPF-UI">
+      <Version>3.0.5</Version>
+    </PackageReference>
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf">
       <Version>2.0.1</Version>
     </PackageReference>

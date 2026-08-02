@@ -7,6 +7,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using SupporTik.Classes;
 using SupporTik.Pages;
+using UiButton = Wpf.Ui.Controls.Button;
+using UiSymbolIcon = Wpf.Ui.Controls.SymbolIcon;
 
 namespace SupporTik.Controls
 {
@@ -65,7 +67,7 @@ namespace SupporTik.Controls
 			{
 				TbGroupTitle.Text = customName;
 				TbGroupTitle.FontWeight = FontWeights.SemiBold;
-				TbGroupTitle.Foreground = (Brush)Application.Current.FindResource("TextPrimary");
+				TbGroupTitle.Foreground = (Brush)FindResource("TextFillColorPrimaryBrush");
 				TbGroupSubtitle.Text = countText;
 				TbGroupSubtitle.Visibility = Visibility.Visible;
 			}
@@ -73,7 +75,7 @@ namespace SupporTik.Controls
 			{
 				TbGroupTitle.Text = countText;
 				TbGroupTitle.FontWeight = FontWeights.Normal;
-				TbGroupTitle.Foreground = (Brush)Application.Current.FindResource("TextSecondary");
+				TbGroupTitle.Foreground = (Brush)FindResource("TextFillColorSecondaryBrush");
 				TbGroupSubtitle.Text = string.Empty;
 				TbGroupSubtitle.Visibility = Visibility.Collapsed;
 			}
@@ -176,7 +178,7 @@ namespace SupporTik.Controls
 			var nameBlock = new TextBlock
 			{
 				Text = bind.Name,
-				Foreground = (Brush)Application.Current.FindResource("TextPrimary"),
+				Foreground = (Brush)FindResource("TextFillColorPrimaryBrush"),
 				FontWeight = FontWeights.SemiBold,
 				FontSize = 13,
 				TextWrapping = TextWrapping.Wrap
@@ -185,7 +187,7 @@ namespace SupporTik.Controls
 			var textBlock = new TextBlock
 			{
 				Text = bind.Text,
-				Foreground = (Brush)Application.Current.FindResource("TextSecondary"),
+				Foreground = (Brush)FindResource("TextFillColorSecondaryBrush"),
 				FontSize = 12,
 				TextTrimming = TextTrimming.CharacterEllipsis,
 				Margin = new Thickness(0, 2, 0, 0)
@@ -195,24 +197,20 @@ namespace SupporTik.Controls
 			textStack.Children.Add(textBlock);
 			Grid.SetColumn(textStack, 0);
 
-			var editBtn = new Button
+			var editBtn = new UiButton
 			{
-				Content = "✏",
-				Width = 28,
-				Height = 28,
-				Margin = new Thickness(6, 0, 0, 0),
-				Style = (Style)Application.Current.FindResource("EditBtnStyle")
+				Icon = new UiSymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Edit24 },
+				Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary,
+				Margin = new Thickness(6, 0, 0, 0)
 			};
 			editBtn.Click += (s, e) => EditBind(bind);
 			Grid.SetColumn(editBtn, 1);
 
-			var deleteBtn = new Button
+			var deleteBtn = new UiButton
 			{
-				Content = "✕",
-				Width = 28,
-				Height = 28,
-				Margin = new Thickness(6, 0, 0, 0),
-				Style = (Style)Application.Current.FindResource("DeleteBtnStyle")
+				Icon = new UiSymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Delete24 },
+				Appearance = Wpf.Ui.Controls.ControlAppearance.Danger,
+				Margin = new Thickness(6, 0, 0, 0)
 			};
 			deleteBtn.Click += (s, e) => DeleteBind(bind);
 			Grid.SetColumn(deleteBtn, 2);

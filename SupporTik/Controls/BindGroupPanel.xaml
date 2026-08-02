@@ -3,12 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              mc:Ignorable="d"
              d:DesignHeight="220" d:DesignWidth="800">
 
-    <Border Style="{StaticResource TemplateCardStyle}"
-            BorderBrush="{StaticResource AccentGreen}"
-            BorderThickness="1.5">
+    <ui:Card Margin="0,0,0,10"
+             BorderBrush="{DynamicResource TextFillColorSecondaryBrush}"
+             BorderThickness="1">
         <StackPanel>
 
             <!-- Заголовок группы: значок папки, название/число шаблонов и общий хоткей -->
@@ -20,48 +21,48 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
-                           Text="📁"
-                           FontSize="14"
-                           Margin="0,0,6,0"
-                           VerticalAlignment="Center"/>
+                <ui:SymbolIcon Grid.Column="0"
+                               Symbol="Folder24"
+                               FontSize="16"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"/>
 
                 <Grid Grid.Column="1" VerticalAlignment="Center">
                     <StackPanel x:Name="sp_titleDisplay">
                         <TextBlock x:Name="TbGroupTitle"
-                                   Foreground="{StaticResource TextPrimary}"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    FontSize="13"
                                    FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis"/>
                         <TextBlock x:Name="TbGroupSubtitle"
-                                   Foreground="{StaticResource TextSecondary}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    FontSize="11"/>
                     </StackPanel>
 
-                    <TextBox x:Name="TbGroupNameInput"
-                             Style="{StaticResource InputTextBoxStyle}"
-                             Padding="6,4"
-                             FontSize="13"
-                             Visibility="Collapsed"
-                             KeyDown="TbGroupNameInput_KeyDown"
-                             LostFocus="TbGroupNameInput_LostFocus"/>
+                    <ui:TextBox x:Name="TbGroupNameInput"
+                                Padding="6,4"
+                                FontSize="13"
+                                Visibility="Collapsed"
+                                KeyDown="TbGroupNameInput_KeyDown"
+                                LostFocus="TbGroupNameInput_LostFocus"/>
                 </Grid>
 
-                <Button Grid.Column="2"
-                        x:Name="BtnRenameGroup"
-                        Content="✏"
-                        Width="22"
-                        Height="22"
-                        Margin="6,0"
-                        Style="{StaticResource TitleBarBtnStyle}"
-                        ToolTip="Назвать группу"
-                        Click="BtnRenameGroup_Click"/>
+                <ui:Button Grid.Column="2"
+                           x:Name="BtnRenameGroup"
+                           Icon="{ui:SymbolIcon Edit24}"
+                           Appearance="Transparent"
+                           Padding="4"
+                           Margin="6,0"
+                           ToolTip="Назвать группу"
+                           Click="BtnRenameGroup_Click"/>
 
                 <Border Grid.Column="3"
-                        Style="{StaticResource HotkeyBadgeStyle}"
-                        Height="20">
+                        Background="{StaticResource SubtleFillBrush}"
+                        CornerRadius="4"
+                        Padding="8,3"
+                        Height="22">
                     <TextBlock x:Name="TbKeys"
-                               Foreground="{StaticResource AccentGreen}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontFamily="Consolas"
                                FontSize="12"/>
                 </Border>
@@ -70,13 +71,13 @@
             <!-- Строки шаблонов, входящих в группу -->
             <StackPanel x:Name="sp_rows"/>
 
-            <Button Content="+ Добавить шаблон с этим сочетанием"
-                    Style="{StaticResource SecondaryBtnStyle}"
-                    HorizontalAlignment="Stretch"
-                    Padding="8,6"
-                    Margin="0,8,0,0"
-                    FontSize="12"
-                    Click="BtnAddToGroup_Click"/>
+            <ui:Button Content="Добавить шаблон с этим сочетанием"
+                       Icon="{ui:SymbolIcon Add24}"
+                       Appearance="Secondary"
+                       HorizontalAlignment="Stretch"
+                       Margin="0,8,0,0"
+                       FontSize="12"
+                       Click="BtnAddToGroup_Click"/>
         </StackPanel>
-    </Border>
+    </ui:Card>
 </UserControl>

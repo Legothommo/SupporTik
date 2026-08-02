@@ -17,9 +17,9 @@
         ResizeMode="NoResize">
 
     <!-- Карточка-меню с закруглениями и тенью -->
-    <Border Background="{StaticResource BgSurface}" 
-            BorderBrush="{StaticResource BorderColor}" 
-            BorderThickness="1" 
+    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+            BorderBrush="{StaticResource BorderSubtleBrush}"
+            BorderThickness="1"
             CornerRadius="10" 
             Padding="8"
             Margin="10">
@@ -35,7 +35,7 @@
         <StackPanel Width="220">
             <!-- Название папки (если задано) -->
             <TextBlock x:Name="TbGroupTitle"
-                       Foreground="{StaticResource TextSecondary}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        FontSize="11"
                        FontWeight="SemiBold"
                        Margin="10,4,10,4"

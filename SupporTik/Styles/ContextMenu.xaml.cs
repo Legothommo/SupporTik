@@ -96,12 +96,12 @@ namespace SupporTik.Styles
 			if (!App._pasteService.IsPaused)
 			{
 				item.Header = "Включено";
-				item.Foreground = (Brush)Application.Current.FindResource("AccentGreen");
+				item.Foreground = (Brush)Application.Current.FindResource("StatusActiveBrush");
 			}
 			else
 			{
 				item.Header = "Выключено";
-				item.Foreground = (Brush)Application.Current.FindResource("AccentCoral");
+				item.Foreground = (Brush)Application.Current.FindResource("StatusPausedBrush");
 			}
 		}
 

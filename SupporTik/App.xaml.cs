@@ -60,6 +60,13 @@ namespace SupporTik
 
 			base.OnStartup(e);
 
+			// Пастельный акцент поверх Fluent-темы, чтобы кнопки Appearance="Primary"
+			// и подобные элементы взяли этот цвет, а не системный синий по умолчанию
+			Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(
+				System.Windows.Media.Color.FromRgb(0x9A, 0xA3, 0xEB),
+				Wpf.Ui.Appearance.ApplicationTheme.Dark,
+				false);
+
 			// Инициализируем сервисы
 			_pasteService = new TextPasteService();
 			_hotkeyService = new HotkeyService();
