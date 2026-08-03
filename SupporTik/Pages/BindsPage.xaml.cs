@@ -79,13 +79,15 @@ namespace SupporTik.Pages
 				// 2. Добавляем в коллекцию
 				App._bindKeys.Add(newBind);
 
-				// 3. Добавляем карточку BindPanel в UI
-				LoadBindPanels();
-
-				// 4. Сохраняем в JSON / регистрируем хоткей
+				// 3. Сохраняем в JSON / регистрируем хоткей
 				App._storageService.SaveData(App._bindKeys);
 				App.RegisterDefaultHotkeys();
 
+				// 4. Перестраиваем карточки — обязательно ПОСЛЕ RegisterDefaultHotkeys(),
+				// иначе он перечитает App._bindKeys с диска и подменит объекты в списке,
+				// а уже созданная карточка будет ссылаться на "осиротевший" экземпляр:
+				// первое редактирование правило бы его, а сохранялся бы актуальный список
+				LoadBindPanels();
 			}
 
 			if (!wasPaused)

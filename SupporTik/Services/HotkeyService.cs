@@ -166,6 +166,15 @@ namespace SupporTik.Services
 				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 			}
 
+			// Пока вставка на паузе (диалог редактирования бинда, ручное выключение
+			// через трей и т.п.) обычные хоткеи вообще не перехватываем — иначе нажатие
+			// "глотается" хуком, а действие всё равно не выполняется из-за паузы, и
+			// стандартные сочетания (если бинд совпал с ними) просто пропадают
+			if (App._pasteService?.IsPaused == true)
+			{
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			}
+
 			ModifierKeys mods = GetCurrentModifiers();
 			HotkeyEntry match = FindMatch(key, mods);
 

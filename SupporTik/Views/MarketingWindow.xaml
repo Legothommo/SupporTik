@@ -1,0 +1,152 @@
+<Window x:Class="SupporTik.Views.MarketingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:local="clr-namespace:SupporTik.Views"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        mc:Ignorable="d"
+        Title="Меню рекламы"
+        Width="420"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        AllowsTransparency="True"
+        Background="{DynamicResource ApplicationBackgroundBrush}">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      ResizeBorderThickness="0"
+                      GlassFrameThickness="0"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Шапка -->
+            <RowDefinition Height="Auto"/>
+            <!-- Статус авторизации -->
+            <RowDefinition Height="Auto"/>
+            <!-- WebView2 для входа -->
+            <RowDefinition Height="Auto"/>
+            <!-- Поиск -->
+            <RowDefinition Height="Auto"/>
+            <!-- Фильтр по статусу -->
+            <RowDefinition Height="Auto"/>
+            <!-- Действия с выбранными -->
+            <RowDefinition Height="*"/>
+            <!-- Результаты -->
+        </Grid.RowDefinitions>
+
+        <!-- 1. Шапка -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Text="Меню рекламы"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"/>
+
+            <ui:Button Grid.Column="1"
+                       Icon="{ui:SymbolIcon Dismiss24}"
+                       Appearance="Transparent"
+                       Padding="6,4"
+                       WindowChrome.IsHitTestVisibleInChrome="True"
+                       Click="Close_Click"/>
+        </Grid>
+
+        <!-- 2. Статус авторизации -->
+        <TextBlock x:Name="TbLoginStatus"
+                   Grid.Row="1"
+                   Text="Войдите в аккаунт Яндекс в открывшемся окне..."
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,10"
+                   Visibility="Collapsed"/>
+
+        <!-- 3. Окно входа — видно только пока пользователь ещё не авторизован -->
+        <wv2:WebView2 x:Name="webView"
+                      Grid.Row="2"
+                      Height="380"
+                      Visibility="Collapsed"
+                      Margin="0,0,0,10"/>
+
+        <!-- 4. Поиск по UID — появляется после успешной авторизации -->
+        <StackPanel x:Name="sp_search"
+                    Grid.Row="3"
+                    Orientation="Horizontal"
+                    Visibility="Collapsed"
+                    Margin="0,0,0,10">
+            <ui:TextBox x:Name="UidTextBox"
+                        Width="170"
+                        PlaceholderText="UID пользователя"
+                        Margin="0,0,8,0"/>
+            <ui:Button x:Name="SearchButton"
+                       Content="Поиск"
+                       Icon="{ui:SymbolIcon Search24}"
+                       Appearance="Primary"
+                       Margin="0,0,8,0"
+                       Click="SearchButton_Click"/>
+            <CheckBox x:Name="ChkSearchRoles"
+                      Content="Роли"
+                      VerticalAlignment="Center"
+                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                      FontSize="12"
+                      ToolTip="Искать и показывать роль пользователя в каждой кампании"/>
+        </StackPanel>
+
+        <!-- 5. Фильтр по статусу -->
+        <StackPanel x:Name="sp_filter"
+                    Grid.Row="4"
+                    Orientation="Horizontal"
+                    Visibility="Collapsed"
+                    Margin="0,0,0,10">
+            <CheckBox x:Name="ChkFilterWaiting"
+                      Content="Ожидает оплаты"
+                      IsChecked="True"
+                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                      FontSize="12"
+                      Margin="0,0,12,0"
+                      Checked="Filter_Changed"
+                      Unchecked="Filter_Changed"/>
+            <CheckBox x:Name="ChkFilterActive"
+                      Content="Активна"
+                      IsChecked="True"
+                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                      FontSize="12"
+                      Margin="0,0,12,0"
+                      Checked="Filter_Changed"
+                      Unchecked="Filter_Changed"/>
+            <CheckBox x:Name="ChkFilterFinished"
+                      Content="Завершена"
+                      IsChecked="True"
+                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                      FontSize="12"
+                      Checked="Filter_Changed"
+                      Unchecked="Filter_Changed"/>
+        </StackPanel>
+
+        <!-- 6. Действия с выбранными карточками -->
+        <StackPanel x:Name="sp_actions" Grid.Row="5" Visibility="Collapsed" Margin="0,0,0,10">
+            <ui:Button x:Name="BtnCopySelected"
+                       Content="Скопировать пермалинки"
+                       Icon="{ui:SymbolIcon Copy24}"
+                       Appearance="Secondary"
+                       HorizontalAlignment="Stretch"
+                       Click="BtnCopySelected_Click"/>
+        </StackPanel>
+
+        <!-- 7. Результаты парсинга — карточки вместо таблицы, так читаемее -->
+        <ScrollViewer Grid.Row="6" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="sp_results"/>
+        </ScrollViewer>
+    </Grid>
+</Window>

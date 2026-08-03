@@ -70,5 +70,41 @@ namespace SupporTik.Properties {
                 this["MinimizeToTray"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool IsLogged {
+            get {
+                return ((bool)(this["IsLogged"]));
+            }
+            set {
+                this["IsLogged"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("57")]
+        public int MarketingMenuKey {
+            get {
+                return ((int)(this["MarketingMenuKey"]));
+            }
+            set {
+                this["MarketingMenuKey"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        public int MarketingMenuModifiers {
+            get {
+                return ((int)(this["MarketingMenuModifiers"]));
+            }
+            set {
+                this["MarketingMenuModifiers"] = value;
+            }
+        }
     }
 }

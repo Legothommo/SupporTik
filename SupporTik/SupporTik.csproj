@@ -49,6 +49,7 @@
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
+    <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
@@ -58,16 +59,20 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="Models\BindKeys.cs" />
-    <Compile Include="Models\QuickMenuEntry.cs" />
-    <Compile Include="Models\BindGroupInfo.cs" />
-    <Compile Include="Models\ExportPackage.cs" />
+    <Compile Include="Classes\BindKeys.cs" />
+    <Compile Include="Classes\MarketingItem.cs" />
+    <Compile Include="Classes\QuickMenuEntry.cs" />
+    <Compile Include="Classes\BindGroupInfo.cs" />
+    <Compile Include="Classes\ExportPackage.cs" />
     <Compile Include="Helpers\KeyExtensions.cs" />
     <Compile Include="Controls\BindPanel.xaml.cs">
       <DependentUpon>BindPanel.xaml</DependentUpon>
     </Compile>
     <Compile Include="Controls\BindGroupPanel.xaml.cs">
       <DependentUpon>BindGroupPanel.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\MarketingItemPanel.xaml.cs">
+      <DependentUpon>MarketingItemPanel.xaml</DependentUpon>
     </Compile>
     <Compile Include="Pages\AboutPage.xaml.cs">
       <DependentUpon>AboutPage.xaml</DependentUpon>
@@ -84,6 +89,9 @@
     <Compile Include="Styles\ContextMenu.xaml.cs">
       <DependentUpon>ContextMenu.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Views\MarketingWindow.xaml.cs">
+      <DependentUpon>MarketingWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Views\QuickTextWindow.xaml.cs">
       <DependentUpon>QuickTextWindow.xaml</DependentUpon>
     </Compile>
@@ -97,6 +105,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Controls\BindGroupPanel.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Controls\MarketingItemPanel.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -140,6 +152,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="Views\MarketingWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="Views\QuickTextWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -175,6 +191,12 @@
     <Resource Include="Assets\app_icon.ico" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack">
+      <Version>1.12.4</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Web.WebView2">
+      <Version>1.0.4078.44</Version>
+    </PackageReference>
     <PackageReference Include="WPF-UI">
       <Version>3.0.5</Version>
     </PackageReference>

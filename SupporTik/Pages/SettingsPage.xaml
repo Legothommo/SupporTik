@@ -141,7 +141,42 @@
                     </StackPanel>
                 </ui:Card>
 
-                <!-- 3. Секция: Импорт и Экспорт -->
+                <!-- 3. Секция: Меню рекламы -->
+                <ui:Card Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="МЕНЮ РЕКЛАМЫ"
+                                   Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="Открывает окно парсинга рекламных кампаний Яндекс.Бизнес"
+                                   Style="{StaticResource SettingDescriptionStyle}"
+                                   Margin="0,0,0,8"/>
+                        <StackPanel>
+                            <TextBlock Text="Сочетание клавиш:"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       FontSize="12"
+                                       Margin="0,0,0,4"/>
+                            <Border x:Name="MarketingHotkeyCaptureArea"
+                                    Background="{DynamicResource ApplicationBackgroundBrush}"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8"
+                                    Focusable="True"
+                                    MouseDown="MarketingHotkeyCaptureArea_MouseDown"
+                                    LostFocus="MarketingHotkeyCaptureArea_LostFocus">
+                                <Grid>
+                                    <TextBlock x:Name="TbMarketingHotkeyDisplay"
+                                               Text="Нажмите для назначения..."
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               FontWeight="SemiBold"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- 4. Секция: Импорт и Экспорт -->
                 <ui:Card Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="ИМПОРТ И ЭКСПОРТ"

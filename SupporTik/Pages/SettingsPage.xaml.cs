@@ -20,12 +20,15 @@ namespace SupporTik.Pages
 
 		private Key _selectedKey = Key.None;
 		private ModifierKeys _selectedModifiers = ModifierKeys.None;
+		private Key _marketingKey = Key.None;
+		private ModifierKeys _marketingModifiers = ModifierKeys.None;
 
 		public SettingsPage()
 		{
 			InitializeComponent();
 			LoadSettings();
 			LoadHotkeyDisplay();
+			LoadMarketingHotkeyDisplay();
 		}
 
 		private void LoadSettings()
@@ -48,6 +51,22 @@ namespace SupporTik.Pages
 				_selectedKey = Key.None;
 				_selectedModifiers = ModifierKeys.None;
 				TbHotkeyDisplay.Text = "Нажмите для назначения...";
+			}
+		}
+
+		private void LoadMarketingHotkeyDisplay()
+		{
+			if (Properties.Settings.Default.MarketingMenuKey != 0 && (ModifierKeys)Properties.Settings.Default.MarketingMenuModifiers != 0)
+			{
+				_marketingKey = (Key)Properties.Settings.Default.MarketingMenuKey;
+				_marketingModifiers = (ModifierKeys)Properties.Settings.Default.MarketingMenuModifiers;
+				TbMarketingHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_marketingModifiers, _marketingKey);
+			}
+			else
+			{
+				_marketingKey = Key.None;
+				_marketingModifiers = ModifierKeys.None;
+				TbMarketingHotkeyDisplay.Text = "Нажмите для назначения...";
 			}
 		}
 
@@ -95,29 +114,59 @@ namespace SupporTik.Pages
 
 		#endregion
 
+		#region Обработка захвата Хоткея (Меню рекламы)
+
+		private void MarketingHotkeyCaptureArea_MouseDown(object sender, MouseButtonEventArgs e)
+		{
+			e.Handled = true;
+			MarketingHotkeyCaptureArea.Focus();
+			MarketingHotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("StatusActiveBrush");
+			TbMarketingHotkeyDisplay.Text = "Нажмите сочетание клавиш...";
+			TbMarketingHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("StatusActiveBrush");
+
+			App._hotkeyService.StartCapture(OnMarketingHotkeyCaptured);
+		}
+
+		private void OnMarketingHotkeyCaptured(Key key, ModifierKeys modifiers)
+		{
+			_marketingModifiers = modifiers;
+			_marketingKey = key;
+
+			TbMarketingHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_marketingModifiers, _marketingKey);
+			TbMarketingHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush");
+			MarketingHotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderSubtleBrush");
+		}
+
+		private void MarketingHotkeyCaptureArea_LostFocus(object sender, RoutedEventArgs e)
+		{
+			App._hotkeyService.CancelCapture();
+			MarketingHotkeyCaptureArea.BorderBrush = (Brush)Application.Current.FindResource("BorderSubtleBrush");
+
+			if (_marketingKey != Key.None)
+			{
+				TbMarketingHotkeyDisplay.Text = KeyExtensions.ToFriendlyShortcut(_marketingModifiers, _marketingKey);
+			}
+			else
+			{
+				TbMarketingHotkeyDisplay.Text = "Нажмите для назначения...";
+			}
+
+			TbMarketingHotkeyDisplay.Foreground = (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush");
+		}
+
+		#endregion
+
 		#region Сохранение Настроек
 
 		private void BtnSave_Click(object sender, RoutedEventArgs e)
 		{
-			// Проверка: конфликт нового хоткея NDA с существующими шаблонами биндов
-			if (_selectedKey != Key.None)
-			{
-				bool isDuplicate = App._bindKeys.Any(x => x.Key == _selectedKey && x.Modifiers == _selectedModifiers);
-				if (isDuplicate)
-				{
-					App._notifyIcon?.ShowBalloonTip(
-						"Ошибка",
-						"Этот хоткей уже используется одним из текстовых биндов!",
-						BalloonIcon.Warning);
-					return;
-				}
-			}
-
 			// Сохранение параметров
 			Properties.Settings.Default.MinimizeToTray = ChkMinimizeToTray.IsChecked == true;
 			Properties.Settings.Default.StartMinimized = ChkStartMinimized.IsChecked == true;
 			Properties.Settings.Default.SelectedModifiers = (int)_selectedModifiers;
 			Properties.Settings.Default.SelectedKey = (int)_selectedKey;
+			Properties.Settings.Default.MarketingMenuModifiers = (int)_marketingModifiers;
+			Properties.Settings.Default.MarketingMenuKey = (int)_marketingKey;
 
 			Properties.Settings.Default.Save();
 
@@ -195,9 +244,10 @@ namespace SupporTik.Pages
 		{
 			App._storageService.ImportData();
 
-			// Импорт мог изменить настройки/хоткей NDA-замены — обновляем то, что показано на экране
+			// Импорт мог изменить настройки/хоткеи — обновляем то, что показано на экране
 			LoadSettings();
 			LoadHotkeyDisplay();
+			LoadMarketingHotkeyDisplay();
 		}
 
 		#endregion

@@ -1,6 +1,7 @@
 ﻿using Hardcodet.Wpf.TaskbarNotification;
 using SupporTik.Classes;
 using SupporTik.Services;
+using SupporTik.Views;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +25,7 @@ namespace SupporTik
 		public static ITextPasteService _pasteService;
 		public static StorageService _storageService;
 		public static QuickTextWindow _quickMenu;
+		public static MarketingWindow _marketingWindow;
 
 		private const string MutexName = "Global\\SupporTik_SingleInstance_Mutex_Guid";
 		private static Mutex _mutex;
@@ -96,6 +98,63 @@ namespace SupporTik
 			}
 		}
 
+		private static void OnMarketingMenuHotkeyPressed()
+		{
+			if (_pasteService.IsPaused)
+			{
+				return;
+			}
+
+			// Переиспользуем уже открытое окно вместо того, чтобы плодить новые при
+			// повторных нажатиях хоткея — IsLoaded становится false после закрытия окна
+			if (_marketingWindow == null || !_marketingWindow.IsLoaded)
+			{
+				_marketingWindow = new MarketingWindow();
+				_marketingWindow.Show();
+			}
+			else
+			{
+				_marketingWindow.Activate();
+			}
+		}
+
+		/// <summary>
+		/// Хоткей, который может совпасть с обычным биндом. В этом случае прямая
+		/// регистрация невозможна (см. RegisterDefaultHotkeys) — вместо неё нажатие
+		/// открывает QuickTextWindow, где это действие показывается пунктом меню.
+		/// </summary>
+		private class SpecialHotkey
+		{
+			public string Name;
+			public Key Key;
+			public ModifierKeys Modifiers;
+			public string MenuLabel;
+			public Action Action;
+		}
+
+		private static List<SpecialHotkey> GetSpecialHotkeys()
+		{
+			return new List<SpecialHotkey>
+			{
+				new SpecialHotkey
+				{
+					Name = "NDAReplace",
+					Key = (Key)SupporTik.Properties.Settings.Default.SelectedKey,
+					Modifiers = (ModifierKeys)SupporTik.Properties.Settings.Default.SelectedModifiers,
+					MenuLabel = "NDA Замена",
+					Action = () => _pasteService.ReplaceSelectionInExternalApp()
+				},
+				new SpecialHotkey
+				{
+					Name = "MarketingMenu",
+					Key = (Key)SupporTik.Properties.Settings.Default.MarketingMenuKey,
+					Modifiers = (ModifierKeys)SupporTik.Properties.Settings.Default.MarketingMenuModifiers,
+					MenuLabel = "Меню рекламы",
+					Action = () => OnMarketingMenuHotkeyPressed()
+				}
+			};
+		}
+
 		/// <summary>
 		/// Собирает пункты всплывающего меню для группы биндов с общим сочетанием клавиш.
 		/// QuickTextWindow сам ничего не знает про BindKeys/настройки — вся эта логика здесь.
@@ -110,27 +169,28 @@ namespace SupporTik
 				})
 				.ToList();
 
-			// Если это сочетание совпадает с хоткеем NDA-замены — прямой хоткей для него
-			// не сработает (см. RegisterDefaultHotkeys), поэтому даём доступ к нему отсюда
+			// Если это сочетание совпадает со специальным хоткеем (NDA-замена, меню рекламы) —
+			// прямая регистрация для него невозможна (см. RegisterDefaultHotkeys), поэтому
+			// даём доступ к нему отсюда
 			var firstBind = binds[0];
-			bool matchesNdaHotkey =
-				firstBind.Key == (Key)SupporTik.Properties.Settings.Default.SelectedKey &&
-				firstBind.Modifiers == (ModifierKeys)SupporTik.Properties.Settings.Default.SelectedModifiers;
 
-			if (matchesNdaHotkey)
+			foreach (var special in GetSpecialHotkeys())
 			{
-				entries.Add(new QuickMenuEntry
+				if (special.Key != Key.None && special.Key == firstBind.Key && special.Modifiers == firstBind.Modifiers)
 				{
-					Name = "NDA Замена",
-					Action = () => _pasteService.ReplaceSelectionInExternalApp(),
-					IsSpecial = true
-				});
+					entries.Add(new QuickMenuEntry
+					{
+						Name = special.MenuLabel,
+						Action = special.Action,
+						IsSpecial = true
+					});
+				}
 			}
 
 			return entries;
 		}
 
-		/// <summary>Название группы биндов с общим сочетанием клавиш, если пользователь его задал.</summary>
+		/// Название группы биндов с общим сочетанием клавиш, если пользователь его задал.
 		public static string GetGroupName(Key key, ModifierKeys modifiers)
 		{
 			return _groupInfos.FirstOrDefault(g => g.Key == key && g.Modifiers == modifiers)?.Name;
@@ -168,13 +228,18 @@ namespace SupporTik
 
 			_hotkeyService.UnregisterAll();
 
-			var groups = _bindKeys.GroupBy(b => new { b.Key, b.Modifiers });
+			var specials = GetSpecialHotkeys();
+			var groups = _bindKeys.GroupBy(b => new { b.Key, b.Modifiers }).ToList();
 
 			foreach (var group in groups)
 			{
 				var binds = group.ToList();
+				var firstBind = binds[0];
 
-				if (binds.Count == 1)
+				bool collidesWithSpecial = specials.Any(s =>
+					s.Key != Key.None && s.Key == firstBind.Key && s.Modifiers == firstBind.Modifiers);
+
+				if (binds.Count == 1 && !collidesWithSpecial)
 				{
 					var bind = binds[0];
 					_hotkeyService.RegisterHotkey(
@@ -185,7 +250,8 @@ namespace SupporTik
 				}
 				else
 				{
-					var firstBind = binds[0];
+					// Либо несколько шаблонов на одном сочетании, либо оно совпадает со
+					// специальным хоткеем (или и то, и другое) — в обоих случаях нужен выбор
 					_hotkeyService.RegisterHotkey(
 						"OpenQuickMenu" + firstBind.Name,
 						firstBind.Key,
@@ -194,12 +260,23 @@ namespace SupporTik
 				}
 			}
 
-			// Регистрация горячей клавиши по умолчанию из настроек
-			_hotkeyService.RegisterHotkey(
-				"NDAReplace",
-				(Key)SupporTik.Properties.Settings.Default.SelectedKey,
-				(ModifierKeys)SupporTik.Properties.Settings.Default.SelectedModifiers,
-				() => _pasteService.ReplaceSelectionInExternalApp());
+			// Специальные хоткеи регистрируем отдельно, только если их сочетание не занято
+			// ни одним биндом — если занято, оно уже вошло в QuickTextWindow выше
+			foreach (var special in specials)
+			{
+				if (special.Key == Key.None)
+				{
+					continue;
+				}
+
+				bool usedByBind = groups.Any(g => g.Key.Key == special.Key && g.Key.Modifiers == special.Modifiers);
+				if (usedByBind)
+				{
+					continue;
+				}
+
+				_hotkeyService.RegisterHotkey(special.Name, special.Key, special.Modifiers, special.Action);
+			}
 		}
 		protected override void OnExit(ExitEventArgs e)
 		{
