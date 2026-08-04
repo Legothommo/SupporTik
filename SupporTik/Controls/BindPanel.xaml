@@ -5,109 +5,110 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:SupporTik.Controls"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:SupporTik.Converters"
              mc:Ignorable="d"
-             d:DesignHeight="450"
-             d:DesignWidth="800">
+             d:DesignWidth="380">
 
     <UserControl.Resources>
-        <ResourceDictionary>
-            <!-- Анимация ОТКРЫТИЯ меню -->
-            <Storyboard x:Key="OpenMenu">
-                <DoubleAnimation Storyboard.TargetName="EditMenu"
-                                 Storyboard.TargetProperty="Height"
-                                 To="44"
-                                 Duration="0:0:0.25">
-                    <DoubleAnimation.EasingFunction>
-                        <CubicEase EasingMode="EaseOut"/>
-                    </DoubleAnimation.EasingFunction>
-                </DoubleAnimation>
-            </Storyboard>
-
-            <!-- Анимация ЗАКРЫТИЯ меню -->
-            <Storyboard x:Key="CloseMenu">
-                <DoubleAnimation Storyboard.TargetName="EditMenu"
-                                 Storyboard.TargetProperty="Height"
-                                 To="0"
-                                 Duration="0:0:0.2">
-                    <DoubleAnimation.EasingFunction>
-                        <CubicEase EasingMode="EaseIn"/>
-                    </DoubleAnimation.EasingFunction>
-                </DoubleAnimation>
-            </Storyboard>
-        </ResourceDictionary>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
     </UserControl.Resources>
 
-    <ui:Card Margin="0,0,0,10">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+    <ui:Card Margin="0,0,0,10"
+             BorderBrush="{DynamicResource TextFillColorSecondaryBrush}"
+             BorderThickness="1">
+        <StackPanel>
 
-            <!-- 1. Шапка карточки (Название и Хоткей) -->
-            <TextBlock x:Name="TbName"
-                       Grid.Row="0"
-                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                       FontWeight="SemiBold"
-                       FontSize="14"
-                       TextWrapping="Wrap"
-                       Margin="0,0,90,0"/>
+            <!-- Заголовок: название (инлайн-редактируемое) + хоткей -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <Border Grid.Row="0"
-                    Background="{StaticResource SubtleFillBrush}"
-                    CornerRadius="4"
-                    Padding="8,3"
-                    HorizontalAlignment="Right"
-                    Height="22">
-                <TextBlock x:Name="TbKeys"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           FontFamily="Consolas"
-                           FontSize="12"/>
-            </Border>
+                <Grid Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock x:Name="TbName"
+                               Text="{Binding Name}"
+                               Visibility="{Binding IsEditingName, Converter={StaticResource InverseBoolToVis}}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               TextTrimming="CharacterEllipsis"/>
 
-            <!-- 2. Текст шаблона -->
-            <TextBlock x:Name="TbText"
-                       Grid.Row="1"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Margin="0,8,0,0"
-                       TextTrimming="CharacterEllipsis"
-                       TextWrapping="Wrap"/>
+                    <ui:TextBox x:Name="TbNameInput"
+                                Text="{Binding NameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                Visibility="{Binding IsEditingName, Converter={StaticResource BoolToVis}}"
+                                FontSize="14"
+                                KeyDown="NameInput_KeyDown"
+                                LostFocus="NameInput_LostFocus"/>
+                </Grid>
 
-            <!-- 3. Панель кнопок редактирования / удаления -->
-            <StackPanel x:Name="EditMenu"
-                        Grid.Row="2"
-                        Orientation="Horizontal"
-                        Margin="0,6,0,0"
-                        HorizontalAlignment="Center"
-                        Height="0"
-                        ClipToBounds="True">
-                <ui:Button Content="Редактировать"
+                <ui:Button Grid.Column="1"
                            Icon="{ui:SymbolIcon Edit24}"
-                           Appearance="Secondary"
-                           Margin="0,0,8,0"
-                           Click="EditHotkey_Click"/>
-                <ui:Button Content="Удалить"
-                           Icon="{ui:SymbolIcon Delete24}"
-                           Appearance="Danger"
-                           Click="DeleteHotkey_Click"/>
-            </StackPanel>
+                           Appearance="Transparent"
+                           Padding="4"
+                           Margin="6,0"
+                           ToolTip="Переименовать"
+                           Command="{Binding StartEditNameCommand}"/>
 
-            <!-- 4. Кнопка раскрытия меню -->
-            <ui:Button Grid.Row="3"
-                       Appearance="Transparent"
-                       Padding="6,4"
-                       HorizontalAlignment="Center"
-                       Margin="0,4,0,0"
-                       Click="Menu_Click">
-                <ui:SymbolIcon Symbol="ChevronDown24"
-                               RenderTransformOrigin="0.5,0.5">
-                    <ui:SymbolIcon.RenderTransform>
-                        <RotateTransform x:Name="ArrowTransform" Angle="180"/>
-                    </ui:SymbolIcon.RenderTransform>
-                </ui:SymbolIcon>
-            </ui:Button>
-        </Grid>
+                <Border Grid.Column="2"
+                        Background="{StaticResource SubtleFillBrush}"
+                        CornerRadius="4"
+                        Padding="8,3"
+                        Height="22">
+                    <TextBlock x:Name="TbKeys"
+                               Text="{Binding KeysDisplay}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontFamily="Consolas"
+                               FontSize="12"/>
+                </Border>
+            </Grid>
+
+            <!-- Текст шаблона (тоже инлайн-редактируемый) -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="TbText"
+                           Grid.Column="0"
+                           Text="{Binding Text}"
+                           Visibility="{Binding IsEditingText, Converter={StaticResource InverseBoolToVis}}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+
+                <ui:TextBox x:Name="TbTextInput"
+                            Grid.Column="0"
+                            Text="{Binding TextInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            Visibility="{Binding IsEditingText, Converter={StaticResource BoolToVis}}"
+                            AcceptsReturn="True"
+                            TextWrapping="Wrap"
+                            MaxHeight="120"
+                            VerticalScrollBarVisibility="Auto"
+                            KeyDown="TextInput_KeyDown"
+                            LostFocus="TextInput_LostFocus"/>
+
+                <ui:Button Grid.Column="1"
+                           Icon="{ui:SymbolIcon Edit24}"
+                           Appearance="Transparent"
+                           Padding="4"
+                           Margin="6,0,0,0"
+                           VerticalAlignment="Top"
+                           ToolTip="Изменить текст"
+                           Command="{Binding StartEditTextCommand}"/>
+            </Grid>
+
+            <!-- Удаление -->
+            <ui:Button Content="Удалить"
+                       Icon="{ui:SymbolIcon Delete24}"
+                       Appearance="Danger"
+                       HorizontalAlignment="Right"
+                       FontSize="12"
+                       Command="{Binding DeleteCommand}"/>
+        </StackPanel>
     </ui:Card>
 </UserControl>

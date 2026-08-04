@@ -70,6 +70,29 @@ namespace SupporTik.Services
 			return (false, default);
 		}
 
+		/// <summary>
+		/// Опрашивает буфер обмена короткими интервалами, пока isReady не увидит нужное
+		/// содержимое (до maxAttempts раз с паузой delayMs), вместо того чтобы один раз
+		/// подождать фиксированное время и надеяться, что буфер уже готов. В обычном случае
+		/// это быстрее фиксированной паузы, а в редком медленном — надёжнее.
+		/// </summary>
+		private static async Task<(bool Success, string Value)> WaitForClipboardAsync(Func<string, bool> isReady, int maxAttempts, int delayMs)
+		{
+			for (int attempt = 0; attempt < maxAttempts; attempt++)
+			{
+				var (ok, text) = await TryClipboardAsync(() => Clipboard.ContainsText() ? Clipboard.GetText() : null, retries: 1, delayMs: 0);
+
+				if (ok && isReady(text))
+				{
+					return (true, text);
+				}
+
+				await Task.Delay(delayMs);
+			}
+
+			return (false, null);
+		}
+
 		#endregion
 
 		#region Вставка текста
@@ -87,11 +110,28 @@ namespace SupporTik.Services
 				return;
 			}
 
-			await Task.Delay(100);
+			// Ждём подтверждения, что буфер реально содержит нужный текст, вместо фиксированной
+			// паузы — SetText синхронный, поэтому обычно это подтверждается почти сразу
+			await WaitForClipboardAsync(t => t == text, maxAttempts: 8, delayMs: 10);
+
+			// Небольшая безусловная пауза перед Ctrl+V — не для буфера (он уже подтверждён
+			// выше), а чтобы вызывающий код гарантированно получил управление обратно ДО
+			// самого нажатия. Если проверка буфера подтвердилась с первой попытки, весь метод
+			// до этого момента мог выполниться полностью синхронно — а вызовы вроде
+			// QuickTextWindow полагаются на то, что успеют скрыться и вернуть фокус целевому
+			// приложению раньше, чем сработает Ctrl+V (см. QuickMenuEntryViewModel)
+			await Task.Delay(20);
 
 			// Имитируем Ctrl + V
 			var simulator = new InputSimulator();
 			simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_V);
+
+			// Буфер намеренно не восстанавливаем обратно: момент, когда целевое приложение
+			// реально прочитало Ctrl+V, мы со своей стороны не видим (в отличие от факта
+			// появления текста в буфере), а произвольная пауза перед перезаписью буфера
+			// слишком часто оказывается короче, чем нужно целевому приложению — тогда либо
+			// вставляется старое содержимое буфера, либо приложение вовсе ловит ошибку доступа
+			// к буферу из-за гонки с нашей записью, и вставка молча не срабатывает
 		}
 
 		#endregion
@@ -118,11 +158,10 @@ namespace SupporTik.Services
 				await TryClipboardAsync(() => Clipboard.Clear());
 				simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_C);
 
-				// Небольшая пауза для Windows Clipboard API
-				await Task.Delay(100);
-
-				// 3. Если текст успешно скопировался
-				var (hasText, selectedText) = await TryClipboardAsync(() => Clipboard.ContainsText() ? Clipboard.GetText() : null);
+				// 3. Ждём, пока в буфере реально появится скопированный текст — буфер только
+				// что очищен, поэтому "не пусто" однозначно значит "скопировалось", и не нужно
+				// гадать с фиксированной паузой, сколько времени на это уйдёт у целевого приложения
+				var (hasText, selectedText) = await WaitForClipboardAsync(t => !string.IsNullOrEmpty(t), maxAttempts: 15, delayMs: 20);
 
 				if (hasText && !string.IsNullOrEmpty(selectedText))
 				{
@@ -135,7 +174,7 @@ namespace SupporTik.Services
 					bool masked = await TryClipboardAsync(() => Clipboard.SetText(replacedText));
 					if (masked)
 					{
-						await Task.Delay(50);
+						await WaitForClipboardAsync(t => t == replacedText, maxAttempts: 8, delayMs: 10);
 
 						simulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_V);
 						await Task.Delay(50);

@@ -4,8 +4,14 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:SupporTik.Converters"
              mc:Ignorable="d"
              d:DesignHeight="220" d:DesignWidth="800">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
+    </UserControl.Resources>
 
     <ui:Card Margin="0,0,0,10"
              BorderBrush="{DynamicResource TextFillColorSecondaryBrush}"
@@ -30,16 +36,31 @@
                 <Grid Grid.Column="1" VerticalAlignment="Center">
                     <StackPanel x:Name="sp_titleDisplay">
                         <TextBlock x:Name="TbGroupTitle"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   Text="{Binding GroupTitle}"
                                    FontSize="13"
-                                   FontWeight="SemiBold"
-                                   TextTrimming="CharacterEllipsis"/>
+                                   TextTrimming="CharacterEllipsis">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontWeight" Value="Normal"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasCustomName}" Value="True">
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <TextBlock x:Name="TbGroupSubtitle"
+                                   Text="{Binding GroupSubtitle}"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   FontSize="11"/>
+                                   FontSize="11"
+                                   Visibility="{Binding HasCustomName, Converter={StaticResource BoolToVis}}"/>
                     </StackPanel>
 
                     <ui:TextBox x:Name="TbGroupNameInput"
+                                Text="{Binding GroupNameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                 Padding="6,4"
                                 FontSize="13"
                                 Visibility="Collapsed"
@@ -54,7 +75,7 @@
                            Padding="4"
                            Margin="6,0"
                            ToolTip="Назвать группу"
-                           Click="BtnRenameGroup_Click"/>
+                           Command="{Binding StartRenameCommand}"/>
 
                 <Border Grid.Column="3"
                         Background="{StaticResource SubtleFillBrush}"
@@ -62,14 +83,98 @@
                         Padding="8,3"
                         Height="22">
                     <TextBlock x:Name="TbKeys"
+                               Text="{Binding KeysDisplay}"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontFamily="Consolas"
                                FontSize="12"/>
                 </Border>
             </Grid>
 
-            <!-- Строки шаблонов, входящих в группу -->
-            <StackPanel x:Name="sp_rows"/>
+            <!-- Строки шаблонов, входящих в группу — название и текст редактируются инлайн -->
+            <ItemsControl x:Name="ItemsHost" ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="0,0,0,6"
+                                Margin="0,0,0,6">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Grid Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}"
+                                                   Visibility="{Binding IsEditingName, Converter={StaticResource InverseBoolToVis}}"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <ui:TextBox Text="{Binding NameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    Visibility="{Binding IsEditingName, Converter={StaticResource BoolToVis}}"
+                                                    FontSize="13"
+                                                    KeyDown="RowNameInput_KeyDown"
+                                                    LostFocus="RowNameInput_LostFocus"/>
+                                    </Grid>
+
+                                    <ui:Button Grid.Column="1"
+                                               Icon="{ui:SymbolIcon Edit24}"
+                                               Appearance="Transparent"
+                                               Padding="4"
+                                               Margin="6,0,0,0"
+                                               ToolTip="Переименовать"
+                                               Command="{Binding StartEditNameCommand}"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Text}"
+                                               Visibility="{Binding IsEditingText, Converter={StaticResource InverseBoolToVis}}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"/>
+                                    <ui:TextBox Grid.Column="0"
+                                                Text="{Binding TextInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                Visibility="{Binding IsEditingText, Converter={StaticResource BoolToVis}}"
+                                                AcceptsReturn="True"
+                                                TextWrapping="Wrap"
+                                                MaxHeight="100"
+                                                VerticalScrollBarVisibility="Auto"
+                                                FontSize="12"
+                                                KeyDown="RowTextInput_KeyDown"
+                                                LostFocus="RowTextInput_LostFocus"/>
+
+                                    <ui:Button Grid.Column="1"
+                                               Icon="{ui:SymbolIcon Edit24}"
+                                               Appearance="Transparent"
+                                               Padding="4"
+                                               Margin="6,0,0,0"
+                                               VerticalAlignment="Top"
+                                               ToolTip="Изменить текст"
+                                               Command="{Binding StartEditTextCommand}"/>
+                                </Grid>
+
+                                <ui:Button Content="Удалить"
+                                           Icon="{ui:SymbolIcon Delete24}"
+                                           Appearance="Danger"
+                                           HorizontalAlignment="Right"
+                                           FontSize="11"
+                                           Padding="8,4"
+                                           Command="{Binding DeleteCommand}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <ui:Button Content="Добавить шаблон с этим сочетанием"
                        Icon="{ui:SymbolIcon Add24}"
@@ -77,7 +182,7 @@
                        HorizontalAlignment="Stretch"
                        Margin="0,8,0,0"
                        FontSize="12"
-                       Click="BtnAddToGroup_Click"/>
+                       Command="{Binding AddToGroupCommand}"/>
         </StackPanel>
     </ui:Card>
 </UserControl>

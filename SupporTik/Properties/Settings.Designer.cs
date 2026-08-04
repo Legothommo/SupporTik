@@ -73,18 +73,6 @@ namespace SupporTik.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool IsLogged {
-            get {
-                return ((bool)(this["IsLogged"]));
-            }
-            set {
-                this["IsLogged"] = value;
-            }
-        }
-
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("57")]
         public int MarketingMenuKey {
             get {
@@ -94,7 +82,7 @@ namespace SupporTik.Properties {
                 this["MarketingMenuKey"] = value;
             }
         }
-
+        
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("2")]
@@ -104,6 +92,30 @@ namespace SupporTik.Properties {
             }
             set {
                 this["MarketingMenuModifiers"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool MarketingMenuFromLeft {
+            get {
+                return ((bool)(this["MarketingMenuFromLeft"]));
+            }
+            set {
+                this["MarketingMenuFromLeft"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool IsLightTheme {
+            get {
+                return ((bool)(this["IsLightTheme"]));
+            }
+            set {
+                this["IsLightTheme"] = value;
             }
         }
     }

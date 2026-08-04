@@ -1,109 +1,82 @@
-﻿using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using SupporTik.Classes;
-using SupporTik.Pages;
+using System.Windows.Input;
+using SupporTik.ViewModels.Binds;
 
 namespace SupporTik.Controls
 {
 	/// <summary>
-	/// Логика взаимодействия для BindPanel.xaml
+	/// Карточка одиночного бинда. Название и текст редактируются прямо тут (инлайн,
+	/// Enter/фокус вовне — сохранить, Escape — отменить), окно используется только
+	/// для создания новых биндов. Данные и команды приходят через DataContext.
 	/// </summary>
 	public partial class BindPanel : UserControl
 	{
-		private readonly BindKeys _bind;
-		private bool _isMenuOpen = false;
+		private BindItemViewModel _viewModel;
 
-		public event EventHandler ItemDeleted;
+		// "Проглатывают" LostFocus сразу после Escape, чтобы отмена не переоткрывалась
+		// автосохранением при потере фокуса скрывшимся полем — тот же приём, что и в BindGroupPanel
+		private bool _suppressNameLostFocusSave;
+		private bool _suppressTextLostFocusSave;
 
-		public BindPanel(BindKeys bind)
+		public BindPanel()
 		{
 			InitializeComponent();
-			_bind = bind;
-
-			TbName.Text = _bind.Name;
-			TbText.Text = _bind.Text;
-			TbKeys.Text = KeyExtensions.ToFriendlyShortcut(_bind.Modifiers, _bind.Key);
+			DataContextChanged += BindPanel_DataContextChanged;
 		}
 
-		#region Управление меню карточки
-
-		private void Menu_Click(object sender, RoutedEventArgs e)
+		private void BindPanel_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
 		{
-			double targetAngle = _isMenuOpen ? 180 : 0;
-			DoubleAnimation rotateAnimation = new DoubleAnimation
-			{
-				To = targetAngle,
-				Duration = TimeSpan.FromSeconds(0.2),
-				EasingFunction = new QuadraticEase()
-			};
-			ArrowTransform.BeginAnimation(RotateTransform.AngleProperty, rotateAnimation);
-
-			if (!_isMenuOpen)
-			{
-				var sb = (Storyboard)FindResource("OpenMenu");
-				sb.Begin();
-				_isMenuOpen = true;
-			}
-			else
-			{
-				var sb = (Storyboard)FindResource("CloseMenu");
-				sb.Begin();
-				_isMenuOpen = false;
-			}
+			_viewModel = e.NewValue as BindItemViewModel;
 		}
 
-		#endregion
-
-		#region Действия с биндом (Редактирование / Удаление)
-
-		private void EditHotkey_Click(object sender, RoutedEventArgs e)
+		private void NameInput_KeyDown(object sender, KeyEventArgs e)
 		{
-			// Запоминаем состояние на случай, если пользователь уже поставил перехват на паузу
-			// вручную (через трей) — диалог не должен снимать эту паузу за него
-			bool wasPaused = App._pasteService.IsPaused;
-			App._pasteService.Pause();
-
-			var addWindow = new BindCreateWindow(_bind)
+			if (e.Key == Key.Enter)
 			{
-				Owner = MainWindow.Instance
-			};
-
-			if (addWindow.ShowDialog() == true)
-			{
-				BindKeys newBind = addWindow.ResultBind;
-
-				// Обновление полей напрямую у редактируемого объекта
-				_bind.Name = newBind.Name;
-				_bind.Text = newBind.Text;
-				_bind.Modifiers = newBind.Modifiers;
-				_bind.Key = newBind.Key;
-
-				// Сохранение и перерегистрация хоткеев
-				App._storageService.SaveData(App._bindKeys);
-				App.RegisterDefaultHotkeys();
+				e.Handled = true;
+				Keyboard.ClearFocus(); // LostFocus сохранит и закроет редактор
 			}
-
-			if (!wasPaused)
+			else if (e.Key == Key.Escape)
 			{
-				App._pasteService.Start();
+				e.Handled = true;
+				_suppressNameLostFocusSave = true;
+				_viewModel?.CancelEditNameCommand.Execute(null);
 			}
-
-			// Оповещаем родительский View (Page) об обновлении UI
-			ItemDeleted?.Invoke(this, EventArgs.Empty);
 		}
 
-		private void DeleteHotkey_Click(object sender, RoutedEventArgs e)
+		private void NameInput_LostFocus(object sender, RoutedEventArgs e)
 		{
-			App._bindKeys.Remove(_bind);
-			App._storageService.SaveData(App._bindKeys);
-			App.RegisterDefaultHotkeys();
+			if (_suppressNameLostFocusSave)
+			{
+				_suppressNameLostFocusSave = false;
+				return;
+			}
 
-			ItemDeleted?.Invoke(this, EventArgs.Empty);
+			_viewModel?.SaveNameCommand.Execute(null);
 		}
 
-		#endregion
+		private void TextInput_KeyDown(object sender, KeyEventArgs e)
+		{
+			// Enter здесь — обычный перенос строки (текст шаблона может быть многострочным),
+			// сохранение — по уходу фокуса; отдельно обрабатываем только отмену по Escape
+			if (e.Key == Key.Escape)
+			{
+				e.Handled = true;
+				_suppressTextLostFocusSave = true;
+				_viewModel?.CancelEditTextCommand.Execute(null);
+			}
+		}
+
+		private void TextInput_LostFocus(object sender, RoutedEventArgs e)
+		{
+			if (_suppressTextLostFocusSave)
+			{
+				_suppressTextLostFocusSave = false;
+				return;
+			}
+
+			_viewModel?.SaveTextCommand.Execute(null);
+		}
 	}
 }

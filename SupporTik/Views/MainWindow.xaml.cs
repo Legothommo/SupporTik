@@ -1,7 +1,10 @@
-﻿using System.Windows;
+using System.ComponentModel;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
 using SupporTik.Pages;
+using SupporTik.Services;
+using SupporTik.ViewModels;
 
 namespace SupporTik
 {
@@ -10,16 +13,35 @@ namespace SupporTik
 	/// </summary>
 	public partial class MainWindow : Window
 	{
-		private bool _isMenuOpen = false;
-
 		public static MainWindow Instance { get; private set; }
+
+		private readonly MainWindowViewModel _viewModel;
 
 		public MainWindow()
 		{
 			InitializeComponent();
 			Instance = this;
 
+			_viewModel = new MainWindowViewModel(new ThemeService());
+			_viewModel.PropertyChanged += ViewModel_PropertyChanged;
+			DataContext = _viewModel;
+
 			MainFrame.Navigate(new BindsPage());
+		}
+
+		private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
+		{
+			if (e.PropertyName == nameof(MainWindowViewModel.IsMenuOpen))
+			{
+				AnimateMenu(_viewModel.IsMenuOpen);
+			}
+		}
+
+		private void AnimateMenu(bool isOpen)
+		{
+			var sb = (Storyboard)FindResource(isOpen ? "OpenMenu" : "CloseMenu");
+			Overlay.IsHitTestVisible = isOpen; // Включаем кликабельность фона для закрытия
+			sb.Begin();
 		}
 
 		#region Управление окном
@@ -54,38 +76,10 @@ namespace SupporTik
 
 		#region Выдвижное меню
 
-		private void BtnBurger_Click(object sender, RoutedEventArgs e)
-		{
-			if (!_isMenuOpen)
-			{
-				OpenMenu();
-			}
-			else
-			{
-				CloseMenu();
-			}
-		}
-
-		private void OpenMenu()
-		{
-			var sb = (Storyboard)FindResource("OpenMenu");
-			Overlay.IsHitTestVisible = true; // Включаем кликабельность фона для закрытия
-			sb.Begin();
-			_isMenuOpen = true;
-		}
-
-		private void CloseMenu()
-		{
-			var sb = (Storyboard)FindResource("CloseMenu");
-			Overlay.IsHitTestVisible = false; // Отключаем тень
-			sb.Begin();
-			_isMenuOpen = false;
-		}
-
 		// Закрываем меню при клике на затемненную область вне меню
 		private void Overlay_MouseDown(object sender, MouseButtonEventArgs e)
 		{
-			CloseMenu();
+			_viewModel.CloseMenuCommand.Execute(null);
 		}
 
 		#endregion
@@ -95,19 +89,19 @@ namespace SupporTik
 		private void GoToBinds(object sender, RoutedEventArgs e)
 		{
 			MainFrame.Navigate(new BindsPage());
-			CloseMenu();
+			_viewModel.CloseMenuCommand.Execute(null);
 		}
 
 		private void GoToSettings(object sender, RoutedEventArgs e)
 		{
 			MainFrame.Navigate(new SettingsPage());
-			CloseMenu();
+			_viewModel.CloseMenuCommand.Execute(null);
 		}
 
 		private void GoToAbout(object sender, RoutedEventArgs e)
 		{
 			MainFrame.Navigate(new AboutPage());
-			CloseMenu();
+			_viewModel.CloseMenuCommand.Execute(null);
 		}
 
 		#endregion

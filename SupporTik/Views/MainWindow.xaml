@@ -80,20 +80,27 @@
                             Margin="8,0">
                     <ui:Button x:Name="BtnBurger"
                                Icon="{ui:SymbolIcon Navigation24}"
-                               Click="BtnBurger_Click"
+                               Command="{Binding ToggleMenuCommand}"
                                WindowChrome.IsHitTestVisibleInChrome="True"
                                Appearance="Transparent"
                                Padding="6,4"/>
                 </StackPanel>
 
-                <TextBlock Grid.Column="1"
-                           Text="SupporTik"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           VerticalAlignment="Center"
-                           HorizontalAlignment="Center"
-                           Margin="12,0"
-                           FontSize="16"
-                           FontWeight="SemiBold"/>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Margin="12,0">
+                    <Image Source="/Assets/logo_header.png"
+                           Width="20"
+                           Height="20"
+                           Margin="0,0,8,0"/>
+                    <TextBlock Text="SupporTik"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               VerticalAlignment="Center"
+                               FontSize="16"
+                               FontWeight="SemiBold"/>
+                </StackPanel>
 
                 <!-- Кнопки управления окном (IsHitTestVisibleInChrome для кликабельности) -->
                 <StackPanel Grid.Column="2"
@@ -106,7 +113,8 @@
                     <ui:Button Icon="{ui:SymbolIcon Dismiss24}"
                                Click="Close_Click"
                                Appearance="Transparent"
-                               Padding="6,4"/>
+                               Padding="6,4">
+                    </ui:Button>
                 </StackPanel>
             </Grid>
 
@@ -162,6 +170,22 @@
                                HorizontalAlignment="Stretch"
                                HorizontalContentAlignment="Left"
                                Click="GoToAbout"/>
+
+                    <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,6"/>
+
+                    <Grid Margin="8,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Светлая тема"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="13"
+                                   VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1"
+                                         IsChecked="{Binding IsLightTheme, Mode=TwoWay}"/>
+                    </Grid>
                 </StackPanel>
 
                 <Border Background="{StaticResource SubtleFillBrush}"
@@ -170,7 +194,7 @@
                         Padding="6,2"
                         Margin="10"
                         VerticalAlignment="Bottom">
-                    <TextBlock Text="v2.0.0"
+                    <TextBlock Text="v2.1.1"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontSize="11"
                                FontWeight="SemiBold"

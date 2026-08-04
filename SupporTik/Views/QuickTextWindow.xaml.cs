@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using SupporTik.Classes;
 using SupporTik.Services;
-using UiButton = Wpf.Ui.Controls.Button;
+using SupporTik.ViewModels;
 
 namespace SupporTik
 {
@@ -28,71 +27,21 @@ namespace SupporTik
 
 		#endregion
 
+		private readonly QuickMenuViewModel _viewModel = new QuickMenuViewModel();
+
 		public QuickTextWindow()
 		{
 			InitializeComponent();
+
+			DataContext = _viewModel;
+			_viewModel.EntryInvoked += (s, e) => Hide();
 		}
 
-		#region Инициализация элементов списка
-
-		/// <summary>
-		/// Рисует список пунктов меню. Окно не знает, что стоит за каждым пунктом —
-		/// это может быть вставка шаблона, NDA-замена или что угодно ещё; вся эта
-		/// логика собирается в App.BuildQuickMenuEntries.
-		/// </summary>
 		/// <param name="groupTitle">Название папки, если пользователь его задал (иначе null/пусто — заголовок скрыт).</param>
 		public void SetEntries(string groupTitle, List<QuickMenuEntry> entries)
 		{
-			if (string.IsNullOrEmpty(groupTitle))
-			{
-				TbGroupTitle.Visibility = Visibility.Collapsed;
-			}
-			else
-			{
-				TbGroupTitle.Text = "📁 " + groupTitle;
-				TbGroupTitle.Visibility = Visibility.Visible;
-			}
-
-			sp_binds.Children.Clear();
-
-			bool separatorAdded = false;
-
-			foreach (QuickMenuEntry entry in entries)
-			{
-				if (entry.IsSpecial && !separatorAdded)
-				{
-					sp_binds.Children.Add(new Separator
-					{
-						Style = (Style)Application.Current.FindResource("TraySeparatorStyle")
-					});
-					separatorAdded = true;
-				}
-
-				// Обрезаем длинное имя
-				string name = entry.Name.Length > 15
-					? entry.Name.Substring(0, 14) + "..."
-					: entry.Name;
-
-				UiButton button = new UiButton
-				{
-					Content = name,
-					Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent,
-					HorizontalContentAlignment = HorizontalAlignment.Left,
-					HorizontalAlignment = HorizontalAlignment.Stretch,
-					Margin = new Thickness(0, 2, 0, 2)
-				};
-
-				button.Click += (sender, e) =>
-				{
-					entry.Action?.Invoke();
-					Hide();
-				};
-
-				sp_binds.Children.Add(button);
-			}
+			_viewModel.SetEntries(groupTitle, entries);
 		}
-
-		#endregion
 
 		#region Позиционирование и поведение окна
 

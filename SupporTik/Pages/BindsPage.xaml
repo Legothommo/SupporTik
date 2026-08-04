@@ -4,10 +4,21 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:local="clr-namespace:SupporTik.Pages"
+      xmlns:controls="clr-namespace:SupporTik.Controls"
+      xmlns:vm="clr-namespace:SupporTik.ViewModels.Binds"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       mc:Ignorable="d"
       d:DesignHeight="450" d:DesignWidth="800"
       Title="BindsPage">
+
+    <Page.Resources>
+        <DataTemplate DataType="{x:Type vm:BindItemViewModel}">
+            <controls:BindPanel/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BindGroupViewModel}">
+            <controls:BindGroupPanel/>
+        </DataTemplate>
+    </Page.Resources>
 
     <Grid Background="{DynamicResource ApplicationBackgroundBrush}">
         <Grid.RowDefinitions>
@@ -31,25 +42,36 @@
                         PlaceholderText="Поиск шаблонов..."
                         Icon="{ui:SymbolIcon Search24}"
                         FontSize="14"
-                        TextChanged="TbSearch_TextChanged"/>
+                        Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
             <ui:Button Grid.Column="1"
                        Content="Новый шаблон"
                        Icon="{ui:SymbolIcon Add24}"
                        Appearance="Primary"
                        Margin="10,0,0,0"
-                       Click="BtnAddBind"/>
+                       Command="{Binding AddBindCommand}"/>
         </Grid>
 
         <!-- 2. Список шаблонов (Карточки) -->
         <ScrollViewer Grid.Row="1" Margin="20,0,20,0" VerticalScrollBarVisibility="Hidden">
-            <StackPanel x:Name="sp_list"/>
+            <ItemsControl x:Name="sp_list" ItemsSource="{Binding RowsView}"/>
         </ScrollViewer>
 
         <!-- 3. Нижний статус-бар -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="20,12,20,20">
-            <Ellipse x:Name="Status" Width="8" Height="8" Fill="{StaticResource StatusActiveBrush}" Margin="0,0,6,0"/>
-            <TextBlock x:Name="TbText" Text="Перехват клавиш активен" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"/>
+            <Ellipse x:Name="Status" Width="8" Height="8" Margin="0,0,6,0">
+                <Ellipse.Style>
+                    <Style TargetType="Ellipse">
+                        <Setter Property="Fill" Value="{StaticResource StatusPausedBrush}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsPasteEnabled}" Value="True">
+                                <Setter Property="Fill" Value="{StaticResource StatusActiveBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Ellipse.Style>
+            </Ellipse>
+            <TextBlock x:Name="TbText" Text="{Binding StatusText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"/>
         </StackPanel>
     </Grid>
 </Page>

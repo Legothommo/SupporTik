@@ -61,7 +61,7 @@
                             <ui:ToggleSwitch x:Name="ChkAutoStart"
                                              Grid.Column="1"
                                              VerticalAlignment="Center"
-                                             Click="ChkAutoStart_Click"/>
+                                             IsChecked="{Binding AutoStartEnabled, Mode=TwoWay}"/>
                         </Grid>
 
                         <Separator Background="{StaticResource BorderSubtleBrush}"
@@ -83,7 +83,7 @@
                             <ui:ToggleSwitch x:Name="ChkMinimizeToTray"
                                              Grid.Column="1"
                                              VerticalAlignment="Center"
-                                             IsChecked="True"/>
+                                             IsChecked="{Binding MinimizeToTray, Mode=TwoWay}"/>
                         </Grid>
 
                         <Separator Background="{StaticResource BorderSubtleBrush}"
@@ -104,7 +104,8 @@
                             </StackPanel>
                             <ui:ToggleSwitch x:Name="ChkStartMinimized"
                                              Grid.Column="1"
-                                             VerticalAlignment="Center"/>
+                                             VerticalAlignment="Center"
+                                             IsChecked="{Binding StartMinimized, Mode=TwoWay}"/>
                         </Grid>
                     </StackPanel>
                 </ui:Card>
@@ -130,7 +131,7 @@
                                     LostFocus="HotkeyCaptureArea_LostFocus">
                                 <Grid>
                                     <TextBlock x:Name="TbHotkeyDisplay"
-                                               Text="Нажмите для назначения..."
+                                               Text="{Binding NdaHotkeyDisplay}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -165,7 +166,7 @@
                                     LostFocus="MarketingHotkeyCaptureArea_LostFocus">
                                 <Grid>
                                     <TextBlock x:Name="TbMarketingHotkeyDisplay"
-                                               Text="Нажмите для назначения..."
+                                               Text="{Binding MarketingHotkeyDisplay}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -173,6 +174,28 @@
                                 </Grid>
                             </Border>
                         </StackPanel>
+
+                        <Separator Background="{StaticResource BorderSubtleBrush}"
+                                   Margin="0,12,0,12"/>
+
+                        <!-- Сторона появления окна -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Открывать слева"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           FontSize="14"/>
+                                <TextBlock Text="Окно меню рекламы выезжает у левого края экрана вместо правого"
+                                           Style="{StaticResource SettingDescriptionStyle}"/>
+                            </StackPanel>
+                            <ui:ToggleSwitch x:Name="ChkMarketingMenuFromLeft"
+                                             Grid.Column="1"
+                                             VerticalAlignment="Center"
+                                             IsChecked="{Binding MarketingMenuFromLeft, Mode=TwoWay}"/>
+                        </Grid>
                     </StackPanel>
                 </ui:Card>
 
@@ -193,7 +216,7 @@
                                        HorizontalAlignment="Stretch"
                                        Margin="0,10,5,10"
                                        Height="34"
-                                       Click="Import_Click"/>
+                                       Command="{Binding ImportCommand}"/>
                             <ui:Button Grid.Column="1"
                                        Content="Экспорт"
                                        Icon="{ui:SymbolIcon ArrowExport24}"
@@ -201,7 +224,7 @@
                                        HorizontalAlignment="Stretch"
                                        Margin="5,10,0,10"
                                        Height="34"
-                                       Click="Export_Click"/>
+                                       Command="{Binding ExportCommand}"/>
                         </Grid>
                     </StackPanel>
                 </ui:Card>
@@ -212,7 +235,7 @@
                            Icon="{ui:SymbolIcon Save24}"
                            Appearance="Primary"
                            HorizontalAlignment="Right"
-                           Click="BtnSave_Click"/>
+                           Command="{Binding SaveCommand}"/>
             </StackPanel>
         </ScrollViewer>
     </Grid>

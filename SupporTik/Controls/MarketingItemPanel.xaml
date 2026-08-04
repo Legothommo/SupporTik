@@ -4,8 +4,15 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:SupporTik.Converters"
              mc:Ignorable="d"
              d:DesignWidth="380">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:StatusToBadgeBrushConverter x:Key="StatusToBadgeBrush"/>
+        <conv:StatusToTextForegroundConverter x:Key="StatusToTextForeground"/>
+    </UserControl.Resources>
 
     <ui:Card x:Name="Card" Margin="0,0,0,8">
         <StackPanel>
@@ -19,6 +26,7 @@
 
                 <TextBlock x:Name="TbPermalink"
                            Grid.Column="0"
+                           Text="{Binding DisplayPermalink}"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            FontWeight="SemiBold"
                            FontSize="13"
@@ -27,12 +35,13 @@
 
                 <Border x:Name="BrStatus"
                         Grid.Column="1"
-                        Background="{StaticResource SubtleFillBrush}"
+                        Background="{Binding StatusKey, Converter={StaticResource StatusToBadgeBrush}}"
                         CornerRadius="4"
                         Padding="8,3"
                         VerticalAlignment="Top">
                     <TextBlock x:Name="TbStatus"
-                               Foreground="Black"
+                               Text="{Binding DisplayStatus}"
+                               Foreground="{Binding StatusKey, Converter={StaticResource StatusToTextForeground}}"
                                FontSize="11"
                                FontWeight="SemiBold"/>
                 </Border>
@@ -52,18 +61,23 @@
                                FontWeight="SemiBold"
                                Margin="0,0,0,2"/>
                     <TextBlock x:Name="TbRemain"
+                               Text="{Binding DisplayRemain}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                FontSize="12"
                                TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <StackPanel x:Name="sp_role" Grid.Column="1" Margin="12,0,0,0">
+                <StackPanel x:Name="sp_role"
+                            Grid.Column="1"
+                            Margin="12,0,0,0"
+                            Visibility="{Binding HasRole, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="РОЛЬ"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontSize="10"
                                FontWeight="SemiBold"
                                Margin="0,0,0,2"/>
                     <TextBlock x:Name="TbRole"
+                               Text="{Binding Role}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                FontSize="12"
                                TextWrapping="Wrap"/>
@@ -72,16 +86,17 @@
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Right">
                 <CheckBox x:Name="ChkSelect"
-                          VerticalAlignment="Center" Click="ChkSelect_Click"/>
+                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                          VerticalAlignment="Center"/>
 
                 <ui:Button x:Name="BtnOpen"
                        Content="Открыть"
                        Icon="{ui:SymbolIcon Open24}"
+                       Command="{Binding OpenCommand}"
                        Appearance="Secondary"
                        HorizontalAlignment="Right"
                        FontSize="12"
-                       Padding="10,4"
-                       Click="BtnOpen_Click"/>
+                       Padding="10,4"/>
             </StackPanel>
         </StackPanel>
     </ui:Card>

@@ -65,6 +65,10 @@
     <Compile Include="Classes\BindGroupInfo.cs" />
     <Compile Include="Classes\ExportPackage.cs" />
     <Compile Include="Helpers\KeyExtensions.cs" />
+    <Compile Include="CompositionRoot.cs" />
+    <Compile Include="Mvvm\ViewModelBase.cs" />
+    <Compile Include="Mvvm\RelayCommand.cs" />
+    <Compile Include="Mvvm\AsyncRelayCommand.cs" />
     <Compile Include="Controls\BindPanel.xaml.cs">
       <DependentUpon>BindPanel.xaml</DependentUpon>
     </Compile>
@@ -97,7 +101,35 @@
     </Compile>
     <Compile Include="Services\HotkeyService.cs" />
     <Compile Include="Services\IHotkeyService.cs" />
+    <Compile Include="Services\IBindsService.cs" />
+    <Compile Include="Services\BindsServiceAdapter.cs" />
+    <Compile Include="Services\IAppSettingsService.cs" />
+    <Compile Include="Services\AppSettingsServiceAdapter.cs" />
+    <Compile Include="Services\IMainWindowProvider.cs" />
+    <Compile Include="Services\IWebViewNavigator.cs" />
+    <Compile Include="Services\WebViewNavigator.cs" />
+    <Compile Include="Services\IMarketingCampaignService.cs" />
+    <Compile Include="Services\MarketingCampaignService.cs" />
+    <Compile Include="Services\INotificationService.cs" />
+    <Compile Include="Services\IThemeService.cs" />
+    <Compile Include="Services\ThemeService.cs" />
+    <Compile Include="Services\NotificationServiceAdapter.cs" />
+    <Compile Include="Services\HotkeyRegistrationService.cs" />
     <Compile Include="Services\MouseHelper.cs" />
+    <Compile Include="ViewModels\Binds\BindItemViewModel.cs" />
+    <Compile Include="ViewModels\Binds\BindGroupViewModel.cs" />
+    <Compile Include="ViewModels\Binds\BindsPageViewModel.cs" />
+    <Compile Include="ViewModels\Binds\BindCreateViewModel.cs" />
+    <Compile Include="ViewModels\AboutPageViewModel.cs" />
+    <Compile Include="ViewModels\SettingsPageViewModel.cs" />
+    <Compile Include="ViewModels\MainWindowViewModel.cs" />
+    <Compile Include="ViewModels\QuickMenuEntryViewModel.cs" />
+    <Compile Include="ViewModels\QuickMenuViewModel.cs" />
+    <Compile Include="ViewModels\TrayMenuViewModel.cs" />
+    <Compile Include="ViewModels\MarketingItemViewModel.cs" />
+    <Compile Include="ViewModels\MarketingWindowViewModel.cs" />
+    <Compile Include="Converters\MarketingStatusConverters.cs" />
+    <Compile Include="Converters\InverseBooleanToVisibilityConverter.cs" />
     <Compile Include="Services\StorageService.cs" />
     <Compile Include="Services\TextPasteService.cs" />
     <Page Include="Controls\BindPanel.xaml">
@@ -113,6 +145,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Styles\Colors.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Styles\ColorsLight.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -189,6 +225,7 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\app_icon.ico" />
+    <Resource Include="Assets\logo_header.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack">
@@ -196,7 +233,28 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Web.WebView2">
       <Version>1.0.4078.44</Version>
+      <GeneratePathProperty>true</GeneratePathProperty>
     </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Пакет Microsoft.Web.WebView2 должен сам копировать нативные WebView2Loader.dll
+         под каждую архитектуру в подпапки runtimes\win-*\native\, но в этом (не-SDK)
+         проекте это почему-то не срабатывает — без них окно "Меню рекламы" падает
+         при инициализации WebView2 на системах с архитектурой, отличной от той, что
+         используется при разработке. Копируем нативные загрузчики для всех архитектур,
+         сохраняя структуру папок runtimes\win-*\native\, как и предполагает пакет. -->
+    <None Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll" Condition="Exists('$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll')">
+      <Link>runtimes\win-x64\native\WebView2Loader.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x86\native\WebView2Loader.dll" Condition="Exists('$(PkgMicrosoft_Web_WebView2)\runtimes\win-x86\native\WebView2Loader.dll')">
+      <Link>runtimes\win-x86\native\WebView2Loader.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-arm64\native\WebView2Loader.dll" Condition="Exists('$(PkgMicrosoft_Web_WebView2)\runtimes\win-arm64\native\WebView2Loader.dll')">
+      <Link>runtimes\win-arm64\native\WebView2Loader.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <PackageReference Include="WPF-UI">
       <Version>3.0.5</Version>
     </PackageReference>

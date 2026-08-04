@@ -72,6 +72,11 @@ namespace SupporTik.Services
 		private readonly object _lock = new object();
 		private readonly Dictionary<string, HotkeyEntry> _hotkeysByName = new Dictionary<string, HotkeyEntry>();
 
+		// Индекс по сочетанию клавиш — FindMatch дёргается на КАЖДОЕ нажатие в системе
+		// (хук глобальный), поэтому важно, чтобы поиск был O(1), а не перебором всех записей
+		private readonly Dictionary<(Key Key, ModifierKeys Modifiers), HotkeyEntry> _hotkeysByCombo =
+			new Dictionary<(Key Key, ModifierKeys Modifiers), HotkeyEntry>();
+
 		// Комбинации, которые сейчас "зажаты" — чтобы автоповтор WM_KEYDOWN не запускал
 		// действие повторно, пока клавиша просто удерживается (как ведёт себя RegisterHotKey)
 		private readonly HashSet<Key> _activeTriggerKeys = new HashSet<Key>();
@@ -83,8 +88,11 @@ namespace SupporTik.Services
 		// Пока задан — следующее подходящее нажатие уходит сюда вместо обычной обработки хоткеев
 		private Action<Key, ModifierKeys> _captureCallback;
 
-		public HotkeyService()
+		private readonly ITextPasteService _pasteService;
+
+		public HotkeyService(ITextPasteService pasteService)
 		{
+			_pasteService = pasteService;
 			_hookProc = HookCallback;
 			_hookHandle = SetHook(_hookProc);
 		}
@@ -114,7 +122,7 @@ namespace SupporTik.Services
 				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 			}
 
-			var hookStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT));
+			var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
 			Key key = KeyInterop.KeyFromVirtualKey((int)hookStruct.vkCode);
 
 			if (IsModifierKey(key))
@@ -170,13 +178,26 @@ namespace SupporTik.Services
 			// через трей и т.п.) обычные хоткеи вообще не перехватываем — иначе нажатие
 			// "глотается" хуком, а действие всё равно не выполняется из-за паузы, и
 			// стандартные сочетания (если бинд совпал с ними) просто пропадают
-			if (App._pasteService?.IsPaused == true)
+			if (_pasteService?.IsPaused == true)
 			{
 				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 			}
 
-			ModifierKeys mods = GetCurrentModifiers();
-			HotkeyEntry match = FindMatch(key, mods);
+			bool anyHotkeys;
+			lock (_lock)
+			{
+				anyHotkeys = _hotkeysByCombo.Count != 0;
+			}
+
+			HotkeyEntry match = null;
+
+			// Хоткеев вообще нет — не тратимся на GetCurrentModifiers (несколько P/Invoke)
+			// и поиск совпадения на каждое нажатие, которых заведомо не будет
+			if (anyHotkeys)
+			{
+				ModifierKeys mods = GetCurrentModifiers();
+				match = FindMatch(key, mods);
+			}
 
 			if (match == null)
 			{
@@ -203,16 +224,8 @@ namespace SupporTik.Services
 		{
 			lock (_lock)
 			{
-				foreach (var entry in _hotkeysByName.Values)
-				{
-					if (entry.Key == key && entry.Modifiers == mods)
-					{
-						return entry;
-					}
-				}
+				return _hotkeysByCombo.TryGetValue((key, mods), out var entry) ? entry : null;
 			}
-
-			return null;
 		}
 
 		private static bool IsModifierKey(Key key)
@@ -251,7 +264,16 @@ namespace SupporTik.Services
 		{
 			lock (_lock)
 			{
-				_hotkeysByName[name] = new HotkeyEntry { Key = key, Modifiers = modifiers, Action = action };
+				// Если по этому имени уже была регистрация на другом сочетании — убираем
+				// её из индекса по сочетанию, иначе там осталась бы битая запись
+				if (_hotkeysByName.TryGetValue(name, out var existing))
+				{
+					_hotkeysByCombo.Remove((existing.Key, existing.Modifiers));
+				}
+
+				var entry = new HotkeyEntry { Key = key, Modifiers = modifiers, Action = action };
+				_hotkeysByName[name] = entry;
+				_hotkeysByCombo[(key, modifiers)] = entry;
 			}
 		}
 
@@ -259,7 +281,11 @@ namespace SupporTik.Services
 		{
 			lock (_lock)
 			{
-				_hotkeysByName.Remove(name);
+				if (_hotkeysByName.TryGetValue(name, out var entry))
+				{
+					_hotkeysByCombo.Remove((entry.Key, entry.Modifiers));
+					_hotkeysByName.Remove(name);
+				}
 			}
 		}
 
@@ -268,6 +294,7 @@ namespace SupporTik.Services
 			lock (_lock)
 			{
 				_hotkeysByName.Clear();
+				_hotkeysByCombo.Clear();
 				_activeTriggerKeys.Clear();
 			}
 		}

@@ -1,74 +1,47 @@
-using SupporTik.Classes;
-using System.Diagnostics;
+using System.ComponentModel;
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Controls;
+using System.Windows.Media;
+using SupporTik.ViewModels;
 
 namespace SupporTik.Controls
 {
 	/// <summary>
-	/// Карточка одной рекламной кампании (MarketingWindow). Данные читаются один раз
-	/// при создании — карточки создаются заново при каждом новом поиске.
+	/// Карточка одной рекламной кампании (MarketingWindow). Данные и команда открытия
+	/// приходят через DataContext (MarketingItemViewModel) — во View остаётся только
+	/// подсветка рамки при выборе (не биндится напрямую, как и в BindPanel/BindGroupPanel).
 	/// </summary>
 	public partial class MarketingItemPanel : UserControl
 	{
-		private readonly MarketingItem _item;
+		private MarketingItemViewModel _viewModel;
 
-		public MarketingItem Item => _item;
-
-		public bool IsSelected => ChkSelect.IsChecked == true;
-
-		public MarketingItemPanel(MarketingItem item)
+		public MarketingItemPanel()
 		{
 			InitializeComponent();
-			_item = item;
-
-			TbPermalink.Text = string.IsNullOrEmpty(item.Permalink) ? "—" : item.Permalink;
-			TbStatus.Text = string.IsNullOrEmpty(item.Status) ? "—" : item.Status;
-			switch (TbStatus.Text)
-			{
-				case "Ожидает оплаты":
-					BrStatus.Background = (Brush)Application.Current.FindResource("AccentYellow");
-					break;
-				case "Активна":
-					BrStatus.Background = (Brush)Application.Current.FindResource("AccentGreen");
-					break;
-				case "Завершена":
-					BrStatus.Background = (Brush)Application.Current.FindResource("AccentCoral");
-					break;
-				default:
-					TbStatus.Foreground = (Brush)Application.Current.FindResource("TextFillColorPrimaryBrush");
-					break;
-			}
-			TbRemain.Text = string.IsNullOrEmpty(item.Remain) ? "—" : item.Remain;
-
-			// Роль показываем только если она реально искалась (чекбокс "Роли" при
-			// поиске был отмечен) — иначе блок просто не нужен на карточке
-			if (string.IsNullOrEmpty(item.Role))
-			{
-				sp_role.Visibility = Visibility.Collapsed;
-			}
-			else
-			{
-				TbRole.Text = item.Role;
-			}
-
-			BtnOpen.IsEnabled = !string.IsNullOrEmpty(item.Href);
+			DataContextChanged += MarketingItemPanel_DataContextChanged;
 		}
 
-		private void BtnOpen_Click(object sender, RoutedEventArgs e)
+		private void MarketingItemPanel_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
 		{
-			if (!string.IsNullOrEmpty(_item.Href))
+			if (_viewModel != null)
 			{
-				Process.Start(new ProcessStartInfo(_item.Href) { UseShellExecute = true });
+				_viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+			}
+
+			_viewModel = e.NewValue as MarketingItemViewModel;
+
+			if (_viewModel != null)
+			{
+				_viewModel.PropertyChanged += ViewModel_PropertyChanged;
 			}
 		}
 
-		private void ChkSelect_Click(object sender, RoutedEventArgs e)
+		private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
 		{
-			var checkBox = (CheckBox)sender;
-			if (checkBox.IsChecked == true) Card.BorderBrush = (Brush)App.Current.FindResource("AccentGreen");
-			else Card.BorderBrush = null;
+			if (e.PropertyName == nameof(MarketingItemViewModel.IsSelected))
+			{
+				Card.BorderBrush = _viewModel.IsSelected ? (Brush)Application.Current.FindResource("AccentGreen") : null;
+			}
 		}
 	}
 }

@@ -6,6 +6,8 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:local="clr-namespace:SupporTik.Views"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:controls="clr-namespace:SupporTik.Controls"
+        xmlns:vm="clr-namespace:SupporTik.ViewModels"
         mc:Ignorable="d"
         Title="Меню рекламы"
         Width="420"
@@ -21,6 +23,13 @@
                       ResizeBorderThickness="0"
                       GlassFrameThickness="0"/>
     </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <DataTemplate DataType="{x:Type vm:MarketingItemViewModel}">
+            <controls:MarketingItemPanel/>
+        </DataTemplate>
+    </Window.Resources>
 
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -65,7 +74,7 @@
         <!-- 2. Статус авторизации -->
         <TextBlock x:Name="TbLoginStatus"
                    Grid.Row="1"
-                   Text="Войдите в аккаунт Яндекс в открывшемся окне..."
+                   Text="Проверка авторизации..."
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                    FontSize="12"
                    TextWrapping="Wrap"
@@ -83,20 +92,28 @@
         <StackPanel x:Name="sp_search"
                     Grid.Row="3"
                     Orientation="Horizontal"
-                    Visibility="Collapsed"
+                    Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
                     Margin="0,0,0,10">
             <ui:TextBox x:Name="UidTextBox"
-                        Width="170"
+                        Width="140"
                         PlaceholderText="UID пользователя"
+                        Text="{Binding Uid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         Margin="0,0,8,0"/>
             <ui:Button x:Name="SearchButton"
-                       Content="Поиск"
+                       Content="{Binding SearchButtonLabel}"
                        Icon="{ui:SymbolIcon Search24}"
                        Appearance="Primary"
                        Margin="0,0,8,0"
-                       Click="SearchButton_Click"/>
+                       Command="{Binding SearchCommand}"/>
+            <ui:ProgressRing Width="18"
+                              Height="18"
+                              IsIndeterminate="True"
+                              Margin="0,0,8,0"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
             <CheckBox x:Name="ChkSearchRoles"
                       Content="Роли"
+                      IsChecked="{Binding SearchRoles, Mode=TwoWay}"
                       VerticalAlignment="Center"
                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                       FontSize="12"
@@ -107,46 +124,58 @@
         <StackPanel x:Name="sp_filter"
                     Grid.Row="4"
                     Orientation="Horizontal"
-                    Visibility="Collapsed"
+                    Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
                     Margin="0,0,0,10">
             <CheckBox x:Name="ChkFilterWaiting"
                       Content="Ожидает оплаты"
-                      IsChecked="True"
+                      IsChecked="{Binding FilterWaiting, Mode=TwoWay}"
                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                       FontSize="12"
-                      Margin="0,0,12,0"
-                      Checked="Filter_Changed"
-                      Unchecked="Filter_Changed"/>
+                      Margin="0,0,12,0"/>
             <CheckBox x:Name="ChkFilterActive"
                       Content="Активна"
-                      IsChecked="True"
+                      IsChecked="{Binding FilterActive, Mode=TwoWay}"
                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                       FontSize="12"
-                      Margin="0,0,12,0"
-                      Checked="Filter_Changed"
-                      Unchecked="Filter_Changed"/>
+                      Margin="0,0,12,0"/>
             <CheckBox x:Name="ChkFilterFinished"
                       Content="Завершена"
-                      IsChecked="True"
+                      IsChecked="{Binding FilterFinished, Mode=TwoWay}"
                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                      FontSize="12"
-                      Checked="Filter_Changed"
-                      Unchecked="Filter_Changed"/>
+                      FontSize="12"/>
         </StackPanel>
 
         <!-- 6. Действия с выбранными карточками -->
-        <StackPanel x:Name="sp_actions" Grid.Row="5" Visibility="Collapsed" Margin="0,0,0,10">
+        <StackPanel x:Name="sp_actions"
+                    Grid.Row="5"
+                    Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+                    Margin="0,0,0,10">
             <ui:Button x:Name="BtnCopySelected"
                        Content="Скопировать пермалинки"
                        Icon="{ui:SymbolIcon Copy24}"
                        Appearance="Secondary"
                        HorizontalAlignment="Stretch"
-                       Click="BtnCopySelected_Click"/>
+                       Command="{Binding CopySelectedCommand}"/>
         </StackPanel>
 
         <!-- 7. Результаты парсинга — карточки вместо таблицы, так читаемее -->
-        <ScrollViewer Grid.Row="6" VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="sp_results"/>
-        </ScrollViewer>
+        <Grid Grid.Row="6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="TbCountMarketing"
+                       Grid.Row="0"
+                       Text="{Binding ResultsCountText}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       FontSize="12"
+                       Margin="0,0,0,8"
+                       Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"/>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="sp_results" ItemsSource="{Binding Items}"/>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </Window>

@@ -74,17 +74,17 @@
 
     <!-- Трей Контекстное Меню -->
     <ContextMenu x:Key="TrayContextMenu" Template="{StaticResource MyContextMenuTemplate}" Style="{StaticResource TrayContextMenuStyle}">
-        <MenuItem Header="Открыть" Click="ShowMainWindow">
+        <MenuItem Header="Открыть" Command="{Binding ShowMainWindowCommand}">
             <MenuItem.Icon>
                 <ui:SymbolIcon Symbol="Apps24"/>
             </MenuItem.Icon>
         </MenuItem>
-        <MenuItem Header="Настройки" Click="OpenSettings">
+        <MenuItem Header="Настройки" Command="{Binding OpenSettingsCommand}">
             <MenuItem.Icon>
                 <ui:SymbolIcon Symbol="Settings24"/>
             </MenuItem.Icon>
         </MenuItem>
-        <MenuItem Header="Включено" Click="EnableText">
+        <MenuItem Header="Включено" Command="{Binding ToggleEnabledCommand}" Tag="EnableToggle">
             <MenuItem.Icon>
                 <ui:SymbolIcon Symbol="Power24"/>
             </MenuItem.Icon>

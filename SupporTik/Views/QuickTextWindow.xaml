@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SupporTik"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         mc:Ignorable="d"
         Title="QuickPaste Menu" 
         SizeToContent="WidthAndHeight" 
@@ -15,6 +16,10 @@
         Background="Transparent"
         MaxHeight="300"
         ResizeMode="NoResize">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
 
     <!-- Карточка-меню с закруглениями и тенью -->
     <Border Background="{DynamicResource ApplicationBackgroundBrush}"
@@ -35,15 +40,31 @@
         <StackPanel Width="220">
             <!-- Название папки (если задано) -->
             <TextBlock x:Name="TbGroupTitle"
+                       Text="{Binding GroupTitle}"
+                       Visibility="{Binding IsGroupTitleVisible, Converter={StaticResource BoolToVis}}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        FontSize="11"
                        FontWeight="SemiBold"
                        Margin="10,4,10,4"
-                       TextTrimming="CharacterEllipsis"
-                       Visibility="Collapsed"/>
+                       TextTrimming="CharacterEllipsis"/>
 
             <ScrollViewer VerticalScrollBarVisibility="Hidden">
-                <StackPanel x:Name="sp_binds"/>
+                <ItemsControl x:Name="sp_binds" ItemsSource="{Binding Entries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel>
+                                <Separator Style="{StaticResource TraySeparatorStyle}"
+                                           Visibility="{Binding ShowSeparatorAbove, Converter={StaticResource BoolToVis}}"/>
+                                <ui:Button Content="{Binding DisplayName}"
+                                           Command="{Binding ExecuteCommand}"
+                                           Appearance="Transparent"
+                                           HorizontalContentAlignment="Left"
+                                           HorizontalAlignment="Stretch"
+                                           Margin="0,2,0,2"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </ScrollViewer>
         </StackPanel>
     </Border>

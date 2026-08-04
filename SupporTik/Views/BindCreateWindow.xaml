@@ -37,7 +37,7 @@
 
             <TextBlock x:Name="TbLabel"
                        Grid.Column="0"
-                       Text="Добавление бинда"
+                       Text="{Binding HeaderText}"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                        VerticalAlignment="Center"
                        HorizontalAlignment="Center"
@@ -76,7 +76,8 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            FontSize="12"
                            Margin="0,0,0,4"/>
-                <ui:TextBox x:Name="TbName"/>
+                <ui:TextBox x:Name="TbName"
+                            Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
             </StackPanel>
 
             <!-- Область записи хоткея -->
@@ -97,7 +98,7 @@
                         LostFocus="HotkeyCaptureArea_LostFocus">
                     <Grid>
                         <TextBlock x:Name="TbHotkeyDisplay"
-                                   Text="Нажмите, чтобы задать хоткей..."
+                                   Text="{Binding HotkeyDisplayText}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -114,6 +115,7 @@
                            FontSize="12"
                            Margin="0,0,0,4"/>
                 <ui:TextBox x:Name="TbText"
+                            Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             AcceptsReturn="True"
                             TextWrapping="Wrap"
                             Height="100"
@@ -127,13 +129,13 @@
                 <ui:Button Content="Отмена"
                            Width="90"
                            Height="32"
-                           Click="BtnCancel_Click"
+                           Command="{Binding CancelCommand}"
                            Appearance="Secondary"
                            Margin="0,0,8,0"/>
                 <ui:Button Content="Сохранить"
                            Width="100"
                            Height="32"
-                           Click="BtnSave_Click"
+                           Command="{Binding SaveCommand}"
                            Appearance="Primary"/>
             </StackPanel>
         </Grid>
