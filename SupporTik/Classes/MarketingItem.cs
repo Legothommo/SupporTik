@@ -12,7 +12,6 @@ namespace SupporTik.Classes
 		public string Status { get; set;  }
 		public string Remain { get; set; }
 		public string Href { get; set; }
-		public string Login { get; set; }
 		public string Role { get; set; }
 	}
 }

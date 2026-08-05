@@ -8,10 +8,11 @@ namespace SupporTik.Services
 	public interface IMarketingCampaignService
 	{
 		/// <summary>
-		/// Ищет кампании по UID, проходит по всем страницам пейджера и (если searchRoles)
-		/// определяет роль пользователя в каждой найденной кампании. progress получает
-		/// текст вида "Роли N/M..." — на время прохода по ролям.
+		/// Ищет кампании по UID через прямой API-запрос (постраничный список). Роль
+		/// пользователя в каждой кампании приходит в том же ответе (массив users) —
+		/// отдельного прохода по страницам настроек больше не требуется.
+		/// progress получает текст вида "Страница N..." на время пагинации.
 		/// </summary>
-		Task<List<MarketingItem>> SearchAsync(string uid, bool searchRoles, IProgress<string> progress);
+		Task<List<MarketingItem>> SearchAsync(string uid, YandexBusinessAuth auth, IProgress<string> progress);
 	}
 }

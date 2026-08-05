@@ -61,6 +61,7 @@
     </ApplicationDefinition>
     <Compile Include="Classes\BindKeys.cs" />
     <Compile Include="Classes\MarketingItem.cs" />
+    <Compile Include="Classes\YandexBusinessAuth.cs" />
     <Compile Include="Classes\QuickMenuEntry.cs" />
     <Compile Include="Classes\BindGroupInfo.cs" />
     <Compile Include="Classes\ExportPackage.cs" />
@@ -106,11 +107,11 @@
     <Compile Include="Services\IAppSettingsService.cs" />
     <Compile Include="Services\AppSettingsServiceAdapter.cs" />
     <Compile Include="Services\IMainWindowProvider.cs" />
-    <Compile Include="Services\IWebViewNavigator.cs" />
-    <Compile Include="Services\WebViewNavigator.cs" />
     <Compile Include="Services\IMarketingCampaignService.cs" />
     <Compile Include="Services\MarketingCampaignService.cs" />
     <Compile Include="Services\INotificationService.cs" />
+    <Compile Include="Services\IUpsaleService.cs" />
+    <Compile Include="Services\UpsaleService.cs" />
     <Compile Include="Services\IThemeService.cs" />
     <Compile Include="Services\ThemeService.cs" />
     <Compile Include="Services\NotificationServiceAdapter.cs" />
@@ -127,6 +128,7 @@
     <Compile Include="ViewModels\QuickMenuViewModel.cs" />
     <Compile Include="ViewModels\TrayMenuViewModel.cs" />
     <Compile Include="ViewModels\MarketingItemViewModel.cs" />
+    <Compile Include="ViewModels\StatusFilterOption.cs" />
     <Compile Include="ViewModels\MarketingWindowViewModel.cs" />
     <Compile Include="Converters\MarketingStatusConverters.cs" />
     <Compile Include="Converters\InverseBooleanToVisibilityConverter.cs" />
@@ -228,9 +230,6 @@
     <Resource Include="Assets\logo_header.png" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="HtmlAgilityPack">
-      <Version>1.12.4</Version>
-    </PackageReference>
     <PackageReference Include="Microsoft.Web.WebView2">
       <Version>1.0.4078.44</Version>
       <GeneratePathProperty>true</GeneratePathProperty>

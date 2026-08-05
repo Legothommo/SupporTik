@@ -1,8 +1,11 @@
 using Microsoft.Web.WebView2.Core;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using SupporTik.Classes;
 using SupporTik.Services;
 using SupporTik.ViewModels;
 using System;
-using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Animation;
@@ -17,9 +20,14 @@ namespace SupporTik.Views
 	/// </summary>
 	public partial class MarketingWindow : Window
 	{
-		private bool _isClosingAnimated = false;
-
 		private const string LoginCheckUrl = "https://yandex.ru/business/priority";
+
+		// DataLens — отдельный сайт (внутренний Yandex Team) со своей сессией/логином,
+		// используется только для проверки апсейлов, не для основного списка кампаний
+		private const string DataLensDashboardUrl = "https://datalens.yandex-team.ru/qniendwn7xvwg-apseyl-po-nomeram-rk?tab=OW";
+		private const string DataLensCookieUrl = "https://datalens.yandex-team.ru";
+
+		private const string YandexCookieUrl = "https://yandex.ru";
 
 		// Фиксированная ширина окна — используется и для позиционирования, и для
 		// анимации, чтобы не зависеть от Width, который во время показа окна может
@@ -29,13 +37,11 @@ namespace SupporTik.Views
 		private readonly MarketingWindowViewModel _viewModel;
 
 		// Сторона, с которой выезжает окно — настраивается в SettingsPage
-		private readonly bool _openFromLeft;
+		private bool OpenFromLeft => Properties.Settings.Default.MarketingMenuFromLeft;
 
 		public MarketingWindow()
 		{
 			InitializeComponent();
-
-			_openFromLeft = Properties.Settings.Default.MarketingMenuFromLeft;
 
 			Width = WindowWidth;
 
@@ -44,12 +50,12 @@ namespace SupporTik.Views
 			var workArea = SystemParameters.WorkArea;
 			Height = workArea.Height - 200;
 			Top = workArea.Top;
-			Left = _openFromLeft ? workArea.Left - WindowWidth : workArea.Right;
+			Left = OpenFromLeft ? workArea.Left - WindowWidth : workArea.Right;
 
-			var navigator = new WebViewNavigator(webView);
-			var campaignService = new MarketingCampaignService(navigator);
+			var campaignService = new MarketingCampaignService();
 			var notificationService = new NotificationServiceAdapter();
-			_viewModel = new MarketingWindowViewModel(campaignService, notificationService);
+			var upsaleService = new UpsaleService();
+			_viewModel = new MarketingWindowViewModel(campaignService, notificationService, upsaleService, EnsureDataLensAuthAsync, GetYandexBusinessAuthAsync);
 			DataContext = _viewModel;
 
 			Loaded += MarketingWindow_Loaded;
@@ -57,13 +63,36 @@ namespace SupporTik.Views
 
 		private async void MarketingWindow_Loaded(object sender, RoutedEventArgs e)
 		{
-			// Даём WPF закончить пересчёт под фактический монитор/DPI после показа —
-			// иначе анимация стартует от значения Left, которое система уже успела
-			// подправить, и получается прыжок/дёрганье вместо плавного выезда
+			// Срабатывает один раз за всё время жизни окна: Hide()/повторный Show() не
+			// пересоздают визуальное дерево, поэтому здесь и первая анимация выезда, и
+			// проверка авторизации — после неё логин больше не перепроверяется, пока
+			// приложение не перезапущено (см. ShowAnimated ниже для повторных открытий)
 			await Dispatcher.Yield(DispatcherPriority.Loaded);
 
 			AnimateSlideIn();
 			await InitializeAsync();
+		}
+
+		/// <summary>
+		/// Показывает уже существующее окно (в том числе ранее скрытое через HideAnimated)
+		/// с анимацией выезда. Для самого первого показа достаточно Show() — Loaded сам
+		/// запустит анимацию и проверку авторизации; при повторных открытиях Loaded больше
+		/// не срабатывает, поэтому готовим стартовую позицию и анимируем вручную.
+		/// </summary>
+		public async void ShowAnimated()
+		{
+			if (!IsLoaded)
+			{
+				Show();
+				return;
+			}
+
+			var workArea = SystemParameters.WorkArea;
+			Left = OpenFromLeft ? workArea.Left - WindowWidth : workArea.Right;
+
+			Show();
+			await Dispatcher.Yield(DispatcherPriority.Loaded);
+			AnimateSlideIn();
 		}
 
 		private void AnimateSlideIn()
@@ -72,13 +101,13 @@ namespace SupporTik.Views
 			var screenHeight = SystemParameters.PrimaryScreenHeight;
 
 			// Целевая позиция — окно "прилипает" к нужному краю, с отступом 20px
-			double targetLeft = _openFromLeft ? 20 : screenWidth - Width - 20;
+			double targetLeft = OpenFromLeft ? 20 : screenWidth - Width - 20;
 			double targetTop = (screenHeight - Height) / 2; // по центру вертикально
 
 			Top = targetTop;
 
 			// Стартовая позиция — полностью за пределами экрана, с соответствующей стороны
-			double startLeft = _openFromLeft ? -Width : screenWidth;
+			double startLeft = OpenFromLeft ? -Width : screenWidth;
 			Left = startLeft;
 
 			var animation = new DoubleAnimation
@@ -96,24 +125,27 @@ namespace SupporTik.Views
 
 		private async Task InitializeAsync()
 		{
-			await webView.EnsureCoreWebView2Async();
-
-			await ShowLoginAsync();
-
 			_viewModel.IsSearchUiVisible = true;
+
+			await webView.EnsureCoreWebView2Async();
 		}
 
-		private async Task ShowLoginAsync()
+		/// <summary>
+		/// Авторизация в DataLens для проверки апсейлов — тот же WebView2, что и для
+		/// списка кампаний (куки разных доменов друг другу не мешают), но своя сессия.
+		/// Логика идентична ShowLoginAsync: если уже залогинен — переход сразу попадёт
+		/// на дашборд и окно логина не покажется вовсе; если нет — ждём редиректа
+		/// на страницу логина и затем перехода обратно после того, как пользователь войдёт.
+		/// </summary>
+		private async Task<(string CookieHeader, string CsrfToken)> EnsureDataLensAuthAsync()
 		{
-			TbLoginStatus.Text = "Проверяем авторизацию...";
+			await webView.EnsureCoreWebView2Async();
+
+			TbLoginStatus.Text = "Проверяем авторизацию в DataLens...";
 			TbLoginStatus.Visibility = Visibility.Visible;
 
 			var tcs = new TaskCompletionSource<bool>();
 
-			// currentUrl нужно перечитывать на каждом NavigationCompleted, а не один раз
-			// до перехода: до первой навигации в этом WebView2 Source ещё пуст, а если
-			// сессия истекла, нас редиректнет на passport.yandex уже ПОСЛЕ Navigate —
-			// это и есть момент, когда окно логина нужно показать пользователю
 			void Handler(object s, CoreWebView2NavigationCompletedEventArgs args)
 			{
 				string currentUrl = webView.CoreWebView2.Source ?? string.Empty;
@@ -122,7 +154,58 @@ namespace SupporTik.Views
 				if (isLoginPage)
 				{
 					webView.Visibility = Visibility.Visible;
-					TbLoginStatus.Text = "Войдите в аккаунт Яндекс в открывшемся окне...";
+					TbLoginStatus.Text = "Войдите в аккаунт login@yandex-team.ru в открывшемся окне...";
+					return; // ждём следующей навигации — после того, как пользователь войдёт
+				}
+
+				if (args.IsSuccess)
+				{
+					webView.CoreWebView2.NavigationCompleted -= Handler;
+					tcs.TrySetResult(true);
+				}
+			}
+
+			webView.CoreWebView2.NavigationCompleted += Handler;
+			webView.CoreWebView2.Navigate(DataLensDashboardUrl);
+
+			await tcs.Task;
+
+			webView.Visibility = Visibility.Collapsed;
+			TbLoginStatus.Visibility = Visibility.Collapsed;
+
+			var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(DataLensCookieUrl);
+			string cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+			string csrfToken = cookies.FirstOrDefault(c => c.Name == "CSRF-TOKEN")?.Value ?? string.Empty;
+
+			return (cookieHeader, csrfToken);
+		}
+
+		/// <summary>
+		/// csrfToken/sessionId/managerUid НЕ куки — это поля из window.__INITIAL__.state.config,
+		/// зашитого в HTML страницы (managerUid — это uid самого залогиненного менеджера,
+		/// config.authorization.uid). Поэтому сначала (пере)переходим на LoginCheckUrl тем
+		/// же приёмом, что и в EnsureDataLensAuthAsync (с ожиданием логина, если сессия
+		/// истекла — WebView2 общий с DataLens и мог успеть уйти на другой домен), а затем
+		/// достаём значения через ExecuteScriptAsync из уже отрисованной страницы.
+		/// </summary>
+		private async Task<YandexBusinessAuth> GetYandexBusinessAuthAsync()
+		{
+			await webView.EnsureCoreWebView2Async();
+
+			TbLoginStatus.Text = "Проверяем авторизацию...";
+			TbLoginStatus.Visibility = Visibility.Visible;
+
+			var tcs = new TaskCompletionSource<bool>();
+
+			void Handler(object s, CoreWebView2NavigationCompletedEventArgs args)
+			{
+				string currentUrl = webView.CoreWebView2.Source ?? string.Empty;
+				bool isLoginPage = currentUrl.ToLowerInvariant().Contains("passport.yandex");
+
+				if (isLoginPage)
+				{
+					webView.Visibility = Visibility.Visible;
+					TbLoginStatus.Text = "Войдите в аккаунт yndx-login@yandex.ru в открывшемся окне...";
 					return; // ждём следующей навигации — после того, как пользователь войдёт
 				}
 
@@ -140,37 +223,61 @@ namespace SupporTik.Views
 
 			webView.Visibility = Visibility.Collapsed;
 			TbLoginStatus.Visibility = Visibility.Collapsed;
+
+			var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(YandexCookieUrl);
+			string cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+
+			const string script =
+				"JSON.stringify({" +
+				"csrfToken: window.__INITIAL__.state.config.csrfToken," +
+				"sessionId: window.__INITIAL__.state.config.counters.analytics.sessionId," +
+				"managerUid: window.__INITIAL__.state.config.authorization.uid" +
+				"})";
+
+			string rawResult = await webView.CoreWebView2.ExecuteScriptAsync(script);
+
+			// ExecuteScriptAsync возвращает JSON-представление строкового результата, то есть
+			// саму нашу JSON-строку ещё раз обёрнутую в кавычки/экранирование — разворачиваем
+			string json = JsonConvert.DeserializeObject<string>(rawResult) ?? string.Empty;
+			var data = string.IsNullOrEmpty(json) ? new JObject() : JObject.Parse(json);
+
+			string csrfToken = data.Value<string>("csrfToken") ?? string.Empty;
+			string sessionId = data.Value<string>("sessionId") ?? string.Empty;
+			string managerUid = data.Value<string>("managerUid") ?? string.Empty;
+
+			return new YandexBusinessAuth(cookieHeader, csrfToken, sessionId, managerUid);
 		}
 
 		#endregion
 
 		private void Close_Click(object sender, RoutedEventArgs e)
 		{
-			Close();
+			HideAnimated();
 		}
 
-		protected override void OnClosing(CancelEventArgs e)
+		private void BtnStatusFilter_Click(object sender, RoutedEventArgs e)
 		{
-			if (!_isClosingAnimated)
-			{
-				e.Cancel = true;
-				_isClosingAnimated = true;
+			StatusFilterPopup.IsOpen = !StatusFilterPopup.IsOpen;
+		}
 
-				double target = _openFromLeft ? -Width : SystemParameters.PrimaryScreenWidth;
-				var animation = new DoubleAnimation
-				{
-					To = target,
-					Duration = TimeSpan.FromMilliseconds(300),
-					EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-				};
-				animation.Completed += (s, args) => Close();
-
-				BeginAnimation(Window.LeftProperty, animation);
-			}
-			else
+		/// <summary>
+		/// Прячет окно вместо реального закрытия — WebView2 (и уже пройденный логин)
+		/// остаётся жить, чтобы при следующем открытии не проверять авторизацию заново.
+		/// Реально окно закрывается только когда приложение целиком завершает работу
+		/// (WPF сам вызывает Close() на всех окнах при Application.Shutdown()).
+		/// </summary>
+		private void HideAnimated()
+		{
+			double target = OpenFromLeft ? -Width : SystemParameters.PrimaryScreenWidth;
+			var animation = new DoubleAnimation
 			{
-				base.OnClosing(e);
-			}
+				To = target,
+				Duration = TimeSpan.FromMilliseconds(300),
+				EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+			};
+			animation.Completed += (s, args) => Hide();
+
+			BeginAnimation(Window.LeftProperty, animation);
 		}
 	}
 }

@@ -108,42 +108,54 @@
             <ui:ProgressRing Width="18"
                               Height="18"
                               IsIndeterminate="True"
-                              Margin="0,0,8,0"
                               VerticalAlignment="Center"
                               Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
-            <CheckBox x:Name="ChkSearchRoles"
-                      Content="Роли"
-                      IsChecked="{Binding SearchRoles, Mode=TwoWay}"
-                      VerticalAlignment="Center"
-                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                      FontSize="12"
-                      ToolTip="Искать и показывать роль пользователя в каждой кампании"/>
+            <ui:TextBlock Text="Ничего не найдёно....."
+                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                          FontSize="12"
+                          VerticalAlignment="Center"
+                          Visibility="{Binding NothingToSearch, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
-        <!-- 5. Фильтр по статусу -->
-        <StackPanel x:Name="sp_filter"
-                    Grid.Row="4"
-                    Orientation="Horizontal"
-                    Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
-                    Margin="0,0,0,10">
-            <CheckBox x:Name="ChkFilterWaiting"
-                      Content="Ожидает оплаты"
-                      IsChecked="{Binding FilterWaiting, Mode=TwoWay}"
-                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                      FontSize="12"
-                      Margin="0,0,12,0"/>
-            <CheckBox x:Name="ChkFilterActive"
-                      Content="Активна"
-                      IsChecked="{Binding FilterActive, Mode=TwoWay}"
-                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                      FontSize="12"
-                      Margin="0,0,12,0"/>
-            <CheckBox x:Name="ChkFilterFinished"
-                      Content="Завершена"
-                      IsChecked="{Binding FilterFinished, Mode=TwoWay}"
-                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                      FontSize="12"/>
-        </StackPanel>
+        <!-- 5. Фильтр по статусу — кнопка со сводкой + выпадающая панель галок (можно
+             выбрать сразу несколько статусов) -->
+        <Grid x:Name="sp_filter"
+              Grid.Row="4"
+              Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+              Margin="0,0,0,10">
+            <ui:Button x:Name="BtnStatusFilter"
+                       Content="{Binding StatusFilterSummary}"
+                       Icon="{ui:SymbolIcon Filter24}"
+                       Appearance="Secondary"
+                       HorizontalAlignment="Stretch"
+                       HorizontalContentAlignment="Left"
+                       Click="BtnStatusFilter_Click"/>
+
+            <Popup x:Name="StatusFilterPopup"
+                   PlacementTarget="{Binding ElementName=BtnStatusFilter}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True">
+                <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="10"
+                        Width="220">
+                    <ItemsControl ItemsSource="{Binding StatusFilters}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Status}"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                          FontSize="12"
+                                          Margin="0,4"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Popup>
+        </Grid>
 
         <!-- 6. Действия с выбранными карточками -->
         <StackPanel x:Name="sp_actions"
@@ -155,7 +167,14 @@
                        Icon="{ui:SymbolIcon Copy24}"
                        Appearance="Secondary"
                        HorizontalAlignment="Stretch"
+                       Margin="0,0,0,8"
                        Command="{Binding CopySelectedCommand}"/>
+            <ui:Button x:Name="BtnCheckUpsales"
+                       Content="{Binding UpsaleButtonLabel}"
+                       Icon="{ui:SymbolIcon ArrowTrendingLines24}"
+                       Appearance="Secondary"
+                       HorizontalAlignment="Stretch"
+                       Command="{Binding CheckUpsalesCommand}"/>
         </StackPanel>
 
         <!-- 7. Результаты парсинга — карточки вместо таблицы, так читаемее -->
@@ -165,13 +184,29 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <TextBlock x:Name="TbCountMarketing"
-                       Grid.Row="0"
-                       Text="{Binding ResultsCountText}"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       FontSize="12"
-                       Margin="0,0,0,8"
-                       Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"/>
+            <Grid Grid.Row="0"
+                  Margin="0,0,0,8"
+                  Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="TbCountMarketing"
+                           Grid.Column="0"
+                           Text="{Binding ResultsCountText}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           FontSize="12"
+                           VerticalAlignment="Center"/>
+
+                <CheckBox x:Name="ChkSelectAll"
+                          Grid.Column="1"
+                          Content="Выбрать все"
+                          IsChecked="{Binding SelectAll, Mode=TwoWay}"
+                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                          FontSize="12"
+                          VerticalAlignment="Center"/>
+            </Grid>
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="sp_results" ItemsSource="{Binding Items}"/>

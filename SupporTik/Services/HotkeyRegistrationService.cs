@@ -202,12 +202,18 @@ namespace SupporTik.Services
 				return;
 			}
 
-			// Переиспользуем уже открытое окно вместо того, чтобы плодить новые при
-			// повторных нажатиях хоткея — IsLoaded становится false после закрытия окна
-			if (_marketingWindow == null || !_marketingWindow.IsLoaded)
+			// Окно создаётся только один раз за всё время работы приложения — закрытие
+			// по крестику теперь лишь прячет его (см. MarketingWindow.HideAnimated), а не
+			// уничтожает, поэтому WebView2 и уже пройденный логин не сбрасываются между
+			// повторными нажатиями хоткея
+			if (_marketingWindow == null)
 			{
 				_marketingWindow = new MarketingWindow();
-				_marketingWindow.Show();
+			}
+
+			if (!_marketingWindow.IsVisible)
+			{
+				_marketingWindow.ShowAnimated();
 			}
 			else
 			{
