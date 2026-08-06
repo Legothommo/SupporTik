@@ -114,7 +114,7 @@
 
     <!-- Иконка Трэя -->
     <tb:TaskbarIcon x:Key="MyNotifyIcon"
-                    IconSource="/Assets/app_icon.ico"
+                    IconSource="/app_icon.ico"
                     ToolTipText="SupporTik"
                     ContextMenu="{StaticResource TrayContextMenu}">
     </tb:TaskbarIcon>

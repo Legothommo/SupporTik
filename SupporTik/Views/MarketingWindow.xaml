@@ -10,7 +10,7 @@
         xmlns:vm="clr-namespace:SupporTik.ViewModels"
         mc:Ignorable="d"
         Title="Меню рекламы"
-        Width="420"
+        Width="600"
         WindowStyle="None"
         ResizeMode="NoResize"
         Topmost="True"

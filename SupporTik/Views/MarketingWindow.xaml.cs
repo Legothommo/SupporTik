@@ -32,7 +32,7 @@ namespace SupporTik.Views
 		// Фиксированная ширина окна — используется и для позиционирования, и для
 		// анимации, чтобы не зависеть от Width, который во время показа окна может
 		// на мгновение отличаться (пересчёт DPI/монитора и т.п.)
-		private const double WindowWidth = 420;
+		private const double WindowWidth = 500;
 
 		private readonly MarketingWindowViewModel _viewModel;
 
@@ -119,7 +119,54 @@ namespace SupporTik.Views
 				EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
 			};
 
+			// FillBehavior по умолчанию — HoldEnd, то есть без явного снятия анимация
+			// продолжает "держать" Left даже после завершения. Из-за этого нативный
+			// ресайз через WindowChrome конфликтует с анимационным клоком — при попытке
+			// потянуть один край съезжает противоположный. Снимаем анимацию по
+			// завершении и фиксируем позицию обычным присвоением.
+			animation.Completed += (s, args) =>
+			{
+				BeginAnimation(Window.LeftProperty, null);
+				Left = targetLeft;
+			};
+
 			BeginAnimation(Window.LeftProperty, animation);
+		}
+
+		private const int InitialStateMaxAttempts = 10;
+		private const int InitialStateRetryDelayMs = 200;
+
+		/// <summary>
+		/// Опрашивает window.__INITIAL__ короткими интервалами вместо одной попытки сразу
+		/// после NavigationCompleted — SPA дозаполняет его клиентским JS уже после события
+		/// загрузки документа, поэтому "не готово" сразу после навигации — не ошибка, а
+		/// нормальная гонка. script должен сам возвращать пустые строки, а не бросать
+		/// исключение, если __INITIAL__ ещё не готов (см. использование ниже).
+		/// </summary>
+		private async Task<JObject> WaitForInitialStateAsync(string script)
+		{
+			for (int attempt = 0; attempt < InitialStateMaxAttempts; attempt++)
+			{
+				string rawResult = await webView.CoreWebView2.ExecuteScriptAsync(script);
+
+				// ExecuteScriptAsync возвращает JSON-представление строкового результата, то
+				// есть саму нашу JSON-строку ещё раз обёрнутую в кавычки/экранирование
+				string json = JsonConvert.DeserializeObject<string>(rawResult) ?? string.Empty;
+
+				if (!string.IsNullOrEmpty(json))
+				{
+					var data = JObject.Parse(json);
+
+					if (!string.IsNullOrEmpty(data.Value<string>("csrfToken")))
+					{
+						return data;
+					}
+				}
+
+				await Task.Delay(InitialStateRetryDelayMs);
+			}
+
+			return new JObject();
 		}
 
 		#region Авторизация (WebView2-проводка — View-специфичная логика)
@@ -191,7 +238,14 @@ namespace SupporTik.Views
 			string csrfToken = cookies.FirstOrDefault(c => c.Name == "CSRF-TOKEN")?.Value ?? string.Empty;
 
 			var result = (cookieHeader, csrfToken);
-			_cachedDataLensAuth = result;
+
+			// Кэшируем только реально успешный результат — та же причина, что и в
+			// GetYandexBusinessAuthAsync ниже
+			if (!string.IsNullOrEmpty(csrfToken))
+			{
+				_cachedDataLensAuth = result;
+			}
+
 			return result;
 		}
 
@@ -247,26 +301,36 @@ namespace SupporTik.Views
 			var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(YandexCookieUrl);
 			string cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
 
+			// NavigationCompleted срабатывает по загрузке HTML-документа, а сама SPA
+			// дозаполняет window.__INITIAL__ клиентским JS уже ПОСЛЕ этого события — сразу
+			// после навигации скрипт иногда успевает выполниться раньше, чем состояние
+			// готово (первый поиск после входа падал с пустым токеном, повторный — уже
+			// успевал). Поэтому не одна попытка, а короткий опрос; сам скрипт защищён от
+			// исключений на "ещё не готово" через && вместо прямого обращения к полям
 			const string script =
 				"JSON.stringify({" +
-				"csrfToken: window.__INITIAL__.state.config.csrfToken," +
-				"sessionId: window.__INITIAL__.state.config.counters.analytics.sessionId," +
-				"managerUid: window.__INITIAL__.state.config.authorization.uid" +
+				"csrfToken: (window.__INITIAL__ && window.__INITIAL__.state && window.__INITIAL__.state.config) ? window.__INITIAL__.state.config.csrfToken : ''," +
+				"sessionId: (window.__INITIAL__ && window.__INITIAL__.state && window.__INITIAL__.state.config && window.__INITIAL__.state.config.counters) ? window.__INITIAL__.state.config.counters.analytics.sessionId : ''," +
+				"managerUid: (window.__INITIAL__ && window.__INITIAL__.state && window.__INITIAL__.state.config && window.__INITIAL__.state.config.authorization) ? window.__INITIAL__.state.config.authorization.uid : ''" +
 				"})";
 
-			string rawResult = await webView.CoreWebView2.ExecuteScriptAsync(script);
-
-			// ExecuteScriptAsync возвращает JSON-представление строкового результата, то есть
-			// саму нашу JSON-строку ещё раз обёрнутую в кавычки/экранирование — разворачиваем
-			string json = JsonConvert.DeserializeObject<string>(rawResult) ?? string.Empty;
-			var data = string.IsNullOrEmpty(json) ? new JObject() : JObject.Parse(json);
+			JObject data = await WaitForInitialStateAsync(script);
 
 			string csrfToken = data.Value<string>("csrfToken") ?? string.Empty;
 			string sessionId = data.Value<string>("sessionId") ?? string.Empty;
 			string managerUid = data.Value<string>("managerUid") ?? string.Empty;
 
 			var auth = new YandexBusinessAuth(cookieHeader, csrfToken, sessionId, managerUid);
-			_cachedYandexAuth = auth;
+
+			// Кэшируем только реально успешный результат — иначе одна неудачная попытка
+			// (например, страница не успела отрисовать window.__INITIAL__) навсегда
+			// застревала бы в кэше пустым токеном, и все следующие поиски получали бы
+			// именно его, даже если пользователь успешно перезашёл
+			if (!string.IsNullOrEmpty(csrfToken))
+			{
+				_cachedYandexAuth = auth;
+			}
+
 			return auth;
 		}
 
@@ -307,7 +371,12 @@ namespace SupporTik.Views
 				Duration = TimeSpan.FromMilliseconds(300),
 				EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
 			};
-			animation.Completed += (s, args) => Hide();
+			animation.Completed += (s, args) =>
+			{
+				Hide();
+				BeginAnimation(Window.LeftProperty, null);
+				Left = target;
+			};
 
 			BeginAnimation(Window.LeftProperty, animation);
 		}

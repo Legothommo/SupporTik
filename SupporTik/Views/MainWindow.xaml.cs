@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
@@ -30,16 +31,38 @@ namespace SupporTik
 
 		private readonly MainWindowViewModel _viewModel;
 
+		// "Идеальный" размер на большом экране — на маленьких (см. ApplySizeForScreen)
+		// пропорционально уменьшается, но не ниже MinWidth/MinHeight из XAML
+		private const double PreferredWidth = 1100;
+		private const double PreferredHeight = 800;
+
 		public MainWindow()
 		{
 			InitializeComponent();
 			Instance = this;
+
+			ApplySizeForScreen();
 
 			_viewModel = new MainWindowViewModel(new ThemeService());
 			_viewModel.PropertyChanged += ViewModel_PropertyChanged;
 			DataContext = _viewModel;
 
 			MainFrame.Navigate(new BindsPage());
+		}
+
+		/// <summary>
+		/// XAML задаёт фиксированные Height/Width — на экранах меньше "идеального" размера
+		/// (например, ноутбук 1366×768) окно рисковало не влезать или перекрывать панель
+		/// задач. Берём долю рабочей области экрана, но не больше PreferredWidth/Height и
+		/// не меньше MinWidth/MinHeight (уже заданы в XAML) — так на больших мониторах
+		/// размер остаётся прежним, а на маленьких окно уменьшается само.
+		/// </summary>
+		private void ApplySizeForScreen()
+		{
+			var workArea = SystemParameters.WorkArea;
+
+			Width = Math.Max(MinWidth, Math.Min(PreferredWidth, workArea.Width * 0.85));
+			Height = Math.Max(MinHeight, Math.Min(PreferredHeight, workArea.Height * 0.85));
 		}
 
 		private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)

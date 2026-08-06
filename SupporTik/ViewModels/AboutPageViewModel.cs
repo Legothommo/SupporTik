@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
+using Newtonsoft.Json.Linq;
 using SupporTik.Mvvm;
 
 namespace SupporTik.ViewModels
@@ -11,13 +13,18 @@ namespace SupporTik.ViewModels
 	{
 		// Один HttpClient на всё приложение — создавать новый на каждый запрос не стоит
 		// (истощает пул сокетов при частых обновлениях). Таймаут — то, чего не хватало
-		// в старой реализации на BitmapImage.UriSource: без него зависший запрос к
-		// cataas.com вешал "Загрузка котика..." навсегда, без ошибки и без возможности понять,
-		// что что-то пошло не так.
+		// в старой реализации на BitmapImage.UriSource: без него зависший запрос вешал
+		// "Загрузка котика..." навсегда, без ошибки и без возможности понять, что что-то
+		// пошло не так.
 		private static readonly HttpClient _httpClient = new HttpClient
 		{
 			Timeout = TimeSpan.FromSeconds(8)
 		};
+
+		// TheCatAPI вместо cataas.com — сначала JSON с URL картинки, потом сама картинка
+		// (два запроса вместо одного, зато без анти-кэш трюков — сервис сам отдаёт каждый
+		// раз новую случайную кошку)
+		private const string CatApiUrl = "https://api.thecatapi.com/v1/images/search";
 
 		// Растёт с каждым новым запросом — если пользователь быстро нажмёт "Обновить"
 		// несколько раз подряд, устаревший (более медленный) ответ не перезатрёт свежий
@@ -68,9 +75,16 @@ namespace SupporTik.ViewModels
 			{
 				try
 				{
-					// Добавляем timestamp к URL, чтобы избежать кэширования ответов
-					string url = $"https://cataas.com/cat?t={DateTime.Now.Ticks}";
-					byte[] bytes = await _httpClient.GetByteArrayAsync(url);
+					// Сначала JSON со ссылкой на случайную картинку, потом сама картинка
+					string searchJson = await _httpClient.GetStringAsync($"{CatApiUrl}?t={DateTime.Now.Ticks}");
+					string imageUrl = JArray.Parse(searchJson).FirstOrDefault()?["url"]?.Value<string>();
+
+					if (string.IsNullOrEmpty(imageUrl))
+					{
+						throw new InvalidOperationException("TheCatAPI не вернул ссылку на картинку");
+					}
+
+					byte[] bytes = await _httpClient.GetByteArrayAsync(imageUrl);
 
 					if (myVersion != _requestVersion)
 					{

@@ -183,11 +183,18 @@ namespace SupporTik.ViewModels
 		}
 
 		private bool _selectAll;
+
+		// Пока true — Item_PropertyChanged не пересчитывает SelectAll на каждое отдельное
+		// IsSelected, которое сама же SelectAll и выставляет ниже (иначе на середине цикла
+		// пересчёт временно нашёл бы "не все выбраны" и сбросил бы галку раньше времени)
+		private bool _suspendSelectAllSync;
+
 		/// <summary>
-		/// Не синхронизируется обратно, если пользователь вручную снял галку с одной
-		/// карточки — это просто переключатель "отметить/снять все". Проходит только по
-		/// ItemsView (видимым под текущим фильтром карточкам), а не по всему Items —
-		/// иначе скрытые фильтром карточки тоже незаметно попадали бы в выделение.
+		/// Двусторонняя синхронизация с выделением карточек: клик по галке отмечает/снимает
+		/// все видимые под текущим фильтром карточки (ItemsView, а не Items — иначе скрытые
+		/// фильтром карточки тоже незаметно попадали бы в выделение); а если пользователь
+		/// сам вручную снял или, наоборот, отметил все карточки по одной — эта галка сама
+		/// подстраивается под фактическое состояние (см. Item_PropertyChanged).
 		/// </summary>
 		public bool SelectAll
 		{
@@ -196,11 +203,41 @@ namespace SupporTik.ViewModels
 			{
 				if (SetProperty(ref _selectAll, value))
 				{
-					foreach (MarketingItemViewModel item in ItemsView)
+					_suspendSelectAllSync = true;
+					try
 					{
-						item.IsSelected = value;
+						foreach (MarketingItemViewModel item in ItemsView)
+						{
+							item.IsSelected = value;
+						}
+					}
+					finally
+					{
+						_suspendSelectAllSync = false;
 					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Подписывается на каждую карточку при её создании (см. SearchAsync) — как только
+		/// пользователь вручную меняет IsSelected у любой карточки, пересчитываем SelectAll
+		/// по фактическому состоянию видимых карточек.
+		/// </summary>
+		private void Item_PropertyChanged(object sender, PropertyChangedEventArgs e)
+		{
+			if (_suspendSelectAllSync || e.PropertyName != nameof(MarketingItemViewModel.IsSelected))
+			{
+				return;
+			}
+
+			var visibleItems = ItemsView.Cast<MarketingItemViewModel>().ToList();
+			bool allSelected = visibleItems.Count > 0 && visibleItems.All(i => i.IsSelected);
+
+			if (_selectAll != allSelected)
+			{
+				_selectAll = allSelected;
+				OnPropertyChanged(nameof(SelectAll));
 			}
 		}
 
@@ -253,6 +290,7 @@ namespace SupporTik.ViewModels
 
 			if (!_suspendFiltering)
 			{
+				ClearSelection();
 				RefreshItemsView();
 			}
 		}
@@ -263,6 +301,7 @@ namespace SupporTik.ViewModels
 
 			if (!_suspendFiltering)
 			{
+				ClearSelection();
 				RefreshItemsView();
 			}
 		}
@@ -273,7 +312,31 @@ namespace SupporTik.ViewModels
 
 			if (!_suspendFiltering)
 			{
+				ClearSelection();
 				RefreshItemsView();
+			}
+		}
+
+		/// <summary>
+		/// Снимает выделение со всех карточек — вызывается, когда пользователь меняет
+		/// фильтр (см. OnStatusFilterChanged/OnRoleFilterChanged/OnUpsaleFilterChanged),
+		/// чтобы старое выделение не "утекало" в новый набор видимых карточек. Карточки
+		/// теперь не пересоздаются при смене фильтра (см. ItemsView), поэтому без явного
+		/// сброса IsSelected сам собой не снимался бы, как раньше. Специально НЕ вызывается
+		/// из RefreshItemsView напрямую — в CheckUpsalesForItemsAsync выделение, наоборот,
+		/// должно пережить обновление списка после проверки апсейлов.
+		/// </summary>
+		private void ClearSelection()
+		{
+			foreach (var item in Items)
+			{
+				item.IsSelected = false;
+			}
+
+			if (_selectAll)
+			{
+				_selectAll = false;
+				OnPropertyChanged(nameof(SelectAll));
 			}
 		}
 
@@ -400,13 +463,18 @@ namespace SupporTik.ViewModels
 			try
 			{
 				YandexBusinessAuth auth = await _getYandexBusinessAuth(_forceRefreshYandexAuth);
-				_forceRefreshYandexAuth = false;
 
 				if (string.IsNullOrEmpty(auth.CsrfToken))
 				{
+					// Токен пустой — просим View в следующий раз обновить его заново, а не
+					// сбрасываем флаг здесь же (иначе при пустом кэше на стороне View
+					// следующая попытка снова получила бы forceRefresh=false)
+					_forceRefreshYandexAuth = true;
 					_notificationService.ShowBalloon("Ошибка", "Не удалось получить данные авторизации yandex.ru/business — проверьте, что вход выполнен.", isWarning: true);
 					return;
 				}
+
+				_forceRefreshYandexAuth = false;
 
 				var progress = new Progress<string>(text => SearchButtonLabel = text);
 				List<MarketingItem> items = await _campaignService.SearchAsync(uid, auth, progress);
@@ -428,7 +496,21 @@ namespace SupporTik.ViewModels
 				List<MarketingItemViewModel> vms = await Task.Run(() =>
 					_allItems.Select(item => new MarketingItemViewModel(item, notificationService)).ToList());
 
+				// Подписка нужна для двусторонней синхронизации с SelectAll (см.
+				// Item_PropertyChanged) — старые карточки из прошлого поиска отписывать не
+				// нужно: они больше никем не удерживаются (не в _items/ItemsView) и уйдут
+				// под сборку мусора вместе со своими подписками
+				foreach (var vm in vms)
+				{
+					vm.PropertyChanged += Item_PropertyChanged;
+				}
+
 				_items.ReplaceRange(vms);
+
+				// Новые карточки и так создаются с IsSelected = false, но саму галку
+				// "Выбрать все" никто не трогал — без явного сброса она осталась бы включённой
+				// с прошлого поиска, хотя фактически ни одна карточка не выбрана
+				ClearSelection();
 
 				RebuildStatusFilters();
 				RebuildRoleFilters();
@@ -522,11 +604,11 @@ namespace SupporTik.ViewModels
 		/// отмеченным карточкам и кладёт в буфер одним куском — тот же принцип отбора, что
 		/// и у CheckUpsalesCommand/CopySelectedCommand (Items.Where(i => i.IsSelected)).
 		/// </summary>
-		private void CopySelectedUpsales()
+		private void CopySelectedUpsales() 
 		{
 			var selected = Items.Where(i => i.IsSelected).ToList();
 
-			if (selected.Count == 0)
+			if (selected.Count <= 1)
 			{
 				_notificationService.ShowBalloon("Предупреждение", "Отметьте хотя бы одну карточку.", isWarning: true);
 				return;
@@ -542,14 +624,9 @@ namespace SupporTik.ViewModels
 
 		public string BuildUpsalesText(List<MarketingItemViewModel> items)
 		{
-			if (items == null || items.Count == 0)
-				return null;
-
 			var hasOneRole = items
 				.Select(x => x.Role)
 				.Distinct();
-
-			if (hasOneRole.Count() != 1) { _notificationService.ShowBalloon("Предупреждение", "Нельзя выбирать разные роли.", isWarning: true); return null; }
 
 			// Проверяем ДО .Contains ниже — у "Не проверено"/"Нет предложения"/"Не продавать"
 			// UpsaleValue либо null, либо не содержит "Продление", иначе .Contains упадёт на null
@@ -557,9 +634,11 @@ namespace SupporTik.ViewModels
 				!string.IsNullOrEmpty(x.UpsaleValue) &&
 				x.UpsaleValue != "Нет предложения" &&
 				x.UpsaleValue != "Проверь в ЛК" &&
-				x.UpsaleValue != "Не продавать");
+				x.UpsaleValue != "Не продавать" &&
+				!x.HasUpsale);
 
 			if (!hasUpsale) { _notificationService.ShowBalloon("Предупреждение", "Выбери кампании с предложениями", isWarning: true); return null; }
+			if (hasOneRole.Count() != 1) { _notificationService.ShowBalloon("Предупреждение", "Нельзя выбирать разные роли.", isWarning: true); return null; }
 
 			bool allUpsalesAreInt = items.All(x => int.TryParse(x.UpsaleValue, out _));
 			bool allUpsalesAreString = items.All(x => x.UpsaleValue.Contains("Продление"));
@@ -572,8 +651,10 @@ namespace SupporTik.ViewModels
 
 			if (allUpsalesAreInt)
 			{
-				firstStroke = string.Join("\r\n\r\n",
-					items.Select(item => $"- https://yandex.ru/business/subscription/campaign/{item.DisplayPermalink}?upsale_budget={item.UpsaleValue}&show_popup=upsale"));
+				firstStroke = string.Join("\r\n",
+					items.Select(item => item.IsMulti
+						? $"- [https://yandex.ru/business/subscription/campaign/{item.DisplayPermalink}?upsale_budget={item.UpsaleValue}&show_popup=upsale](https://yandex.ru/business/subscription/campaign/{item.DisplayPermalink}?upsale_budget={item.UpsaleValue}&show_popup=upsale)"
+						: $"- [https://yandex.ru/business/priority/campaign/{item.DisplayPermalink}/main?show_popup=upsale&upsale_budget={item.UpsaleValue}](https://yandex.ru/business/priority/campaign/{item.DisplayPermalink}/main?show_popup=upsale&upsale_budget={item.UpsaleValue})"));
 
 				result = $"Мы заметили, что вам доступны увеличения бюджета для ваших рекламных кампаний. Увеличьте месячный бюджет на продвижения, чтобы повысить их охват:\r\n\r\n" +
 					$"{firstStroke}\r\n\r\n" +
@@ -586,9 +667,9 @@ namespace SupporTik.ViewModels
 			}
 			if (allUpsalesAreString)
 			{
-				firstStroke = string.Join("\r\n\r\n",
+				firstStroke = string.Join("\r\n",
 						items.Select(item => $"- № {item.DisplayPermalink}")) + ".";
-				secondStroke = string.Join("\r\n\r\n",
+				secondStroke = string.Join("\r\n",
 					items.Select(item =>
 					{
 						int days = int.Parse(item.UpsaleValue.Split(' ')[1]);
@@ -679,8 +760,10 @@ namespace SupporTik.ViewModels
 			}
 
 			// DataLens отдаёт "Продление N дней" только как намёк на срок, не сумму —
-			// для таких карточек сразу же считаем точную сумму через calculate-budget
-			await ResolveRenewalAmountsAsync(items, progress);
+			// для таких карточек сразу же считаем точную сумму через calculate-budget.
+			// isMulti нужен у всех проверенных карточек (не только продлений), поэтому
+			// заодно достаём его и для остальных (см. ResolveCampaignDetailsAsync)
+			await ResolveCampaignDetailsAsync(items, progress);
 
 			// Категории апсейла у части карточек только что изменились (Не проверено ->
 			// Есть/Нет апсейла) — обновляем список вариантов в фильтре и сам вид. Раньше
@@ -694,20 +777,24 @@ namespace SupporTik.ViewModels
 		/// <summary>
 		/// Для карточек с "Продление N дней" в UpsaleValue считает точную сумму продления
 		/// через billing/calculate-web-renewal-budget (см. BudgetService — csrfToken/sessionId
-		/// конкретной кампании достаются обычным HTTP GET её страницы, без WebView2/JS).
-		/// Раньше это делалось строго по очереди (единственный экземпляр WebView2) — теперь
+		/// конкретной кампании достаются обычным HTTP GET её страницы, без WebView2/JS) и
+		/// заодно получает isMulti/businessSnapshotReviewedStatus. Для остальных проверенных
+		/// карточек (апсейлы-числа и т.п.) полный расчёт не нужен, но эти два флага — нужны
+		/// всем, поэтому для них делается облегчённый запрос (GetCampaignFlagsAsync, без POST
+		/// на calculate-web-renewal-budget). Раньше это делалось строго по очереди (единственный
+		/// экземпляр WebView2) — теперь
 		/// это обычные HTTP-запросы, поэтому идёт с ограниченной параллельностью
 		/// (MaxConcurrentRenewalChecks), как и проверка апсейлов в UpsaleService. Если для
 		/// конкретной кампании не получилось — просто пропускает её, не прерывая проверку
 		/// остальных.
 		/// </summary>
-		private async Task ResolveRenewalAmountsAsync(List<MarketingItemViewModel> items, IProgress<string> progress)
+		private async Task ResolveCampaignDetailsAsync(List<MarketingItemViewModel> items, IProgress<string> progress)
 		{
-			var renewalItems = items
-				.Where(i => !string.IsNullOrEmpty(i.UpsaleValue) && i.UpsaleValue.Contains("Продление"))
+			var relevantItems = items
+				.Where(i => !string.IsNullOrEmpty(i.RawPermalink))
 				.ToList();
 
-			if (renewalItems.Count == 0)
+			if (relevantItems.Count == 0)
 			{
 				return;
 			}
@@ -718,41 +805,54 @@ namespace SupporTik.ViewModels
 
 			if (string.IsNullOrEmpty(auth.CookieHeader))
 			{
-				return; // не авторизованы — пропускаем расчёт бюджета, апсейлы уже проверены
+				return; // не авторизованы — пропускаем, апсейлы уже проверены
 			}
 
 			int completed = 0;
 
 			using (var throttle = new SemaphoreSlim(MaxConcurrentRenewalChecks))
 			{
-				var tasks = renewalItems.Select(async item =>
+				var tasks = relevantItems.Select(async item =>
 				{
 					await throttle.WaitAsync();
 					try
 					{
-						var match = RenewalDaysRegex.Match(item.UpsaleValue);
-						if (!match.Success || !int.TryParse(match.Value, out int durationDays))
+						bool isRenewal = !string.IsNullOrEmpty(item.UpsaleValue) && item.UpsaleValue.Contains("Продление");
+
+						if (isRenewal)
 						{
-							return;
+							var match = RenewalDaysRegex.Match(item.UpsaleValue);
+							if (!match.Success || !int.TryParse(match.Value, out int durationDays))
+							{
+								return;
+							}
+
+							var result = await _budgetService.CalculateRenewalAmountAsync(item.CompanyPermalink, item.RawPermalink, auth.CookieHeader, durationDays);
+
+							if (result != null)
+							{
+								item.SetAmountUpsale(result[0]);
+								item.SetPrediction(result[1]);
+								item.SetIsMulti(result.TryGetValue(2, out string isMultiRaw) && bool.TryParse(isMultiRaw, out bool isMulti) && isMulti);
+								item.SetHasBudgetIncreaseButton(result.TryGetValue(3, out string hasButtonRaw) && bool.TryParse(hasButtonRaw, out bool hasButton) && hasButton);
+							}
 						}
-
-						var result = await _budgetService.CalculateRenewalAmountAsync(item.CompanyPermalink, item.RawPermalink, auth.CookieHeader, durationDays);
-
-						if (result != null)
+						else
 						{
-							item.SetAmountUpsale(result[0]);
-							item.SetPrediction(result[1]);
+							var flags = await _budgetService.GetCampaignFlagsAsync(item.RawPermalink, auth.CookieHeader);
+							item.SetIsMulti(flags.IsMulti);
+							item.SetHasBudgetIncreaseButton(flags.HasBudgetIncreaseButton);
 						}
 					}
 					catch (Exception)
 					{
-						// Не удалось посчитать бюджет для конкретной кампании — оставляем как
-						// есть ("Продление N дней") и переходим к следующей
+						// Не удалось получить детали для конкретной кампании — оставляем как
+						// есть и переходим к следующей
 					}
 					finally
 					{
 						int done = Interlocked.Increment(ref completed);
-						progress?.Report($"Проверка продления {done}/{renewalItems.Count}...");
+						progress?.Report($"Проверка кампаний {done}/{relevantItems.Count}...");
 						throttle.Release();
 					}
 				});

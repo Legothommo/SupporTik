@@ -107,7 +107,7 @@
                                FontWeight="SemiBold"
                                Margin="0,0,0,2"/>
                     <TextBlock x:Name="TbUpsale"
-                               Text="{Binding UpsaleValue}"
+                               Text="{Binding UpsaleDisplayValue}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                FontSize="12"
                                TextWrapping="NoWrap"

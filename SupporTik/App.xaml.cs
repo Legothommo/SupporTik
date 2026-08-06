@@ -1,7 +1,11 @@
 using Hardcodet.Wpf.TaskbarNotification;
+using Microsoft.Win32;
 using SupporTik.Services;
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -17,8 +21,64 @@ namespace SupporTik
 		private static Mutex _mutex;
 		private static bool _hasHandle = false;
 
+		// Без явного AppUserModelID Hardcodet.Wpf.TaskbarNotification на каждый запуск сама
+		// генерирует Windows-у случайный "NotifyIconGeneratedAumid_..." и регистрирует под
+		// ним иконку уведомлений во временный PNG — при частых перезапусках (особенно в
+		// разработке) в реестре копится куча таких записей, и уведомления могут годами
+		// показывать иконку, замороженную в одной из старых (даже если временный файл давно
+		// удалён). Явный, стабильный AUMID — единственный настоящий фикс: Windows начинает
+		// переиспользовать одну и ту же запись вместо создания новой на каждый запуск.
+		[DllImport("shell32.dll", SetLastError = true)]
+		private static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
+
+		private const string AppUserModelId = "SupporTik.DesktopApp";
+
+		/// <summary>
+		/// SetCurrentProcessExplicitAppUserModelID сам по себе ничего не регистрирует —
+		/// без DisplayName/IconUri под этим AUMID в реестре Windows нечего показать (отсюда
+		/// сырая строка AUMID вместо названия при первой попытке). IconUri у AppUserModelId
+		/// (в отличие от классических DefaultIcon) не понимает синтаксис "путь,индекс" —
+		/// нужен путь к самому файлу картинки. Поэтому извлекаем иконку из exe и кладём её
+		/// не во временную папку (как делал Hardcodet — оттуда её могло стереть системной
+		/// очисткой), а в %LOCALAPPDATA%\SupporTik — переживёт что угодно, кроме удаления
+		/// самого приложения. Пишем при каждом запуске (дёшево) — самовосстановится, если
+		/// приложение переедет в другую папку или иконку обновят.
+		/// </summary>
+		private static void RegisterAppUserModelId()
+		{
+			try
+			{
+				string exePath = Process.GetCurrentProcess().MainModule.FileName;
+
+				string iconDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SupporTik");
+				Directory.CreateDirectory(iconDir);
+				string iconPath = Path.Combine(iconDir, "notification_icon.ico");
+
+				using (var icon = System.Drawing.Icon.ExtractAssociatedIcon(exePath))
+				using (var stream = new FileStream(iconPath, FileMode.Create, FileAccess.Write))
+				{
+					icon.Save(stream);
+				}
+
+				using (var key = Registry.CurrentUser.CreateSubKey($@"Software\Classes\AppUserModelId\{AppUserModelId}"))
+				{
+					key.SetValue("DisplayName", "SupporTik", RegistryValueKind.String);
+					key.SetValue("IconUri", iconPath, RegistryValueKind.String);
+				}
+			}
+			catch (Exception)
+			{
+				// Не критично — просто уведомления останутся без красивой иконки/названия
+			}
+		}
+
 		protected override async void OnStartup(StartupEventArgs e)
 		{
+			// Обязательно ДО первого обращения к TaskbarIcon (FindResource ниже её и создаёт) —
+			// иначе Hardcodet уже успеет сгенерировать свой случайный AUMID
+			RegisterAppUserModelId();
+			SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
+
 			// .NET Framework по умолчанию держит не больше 2 одновременных подключений
 			// к одному хосту (ServicePointManager.DefaultConnectionLimit) — без этого
 			// параллельные запросы страниц кампаний/апсейлов (см. MarketingCampaignService,
