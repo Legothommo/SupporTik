@@ -38,5 +38,7 @@ namespace SupporTik.Services
 		public void StartHotkeyCapture(Action<Key, ModifierKeys> onCaptured) => HotkeyService.StartCapture(onCaptured);
 
 		public void CancelHotkeyCapture() => HotkeyService.CancelCapture();
+
+		public void ShowMarketingMenu() => Hotkeys.ShowMarketingMenu();
 	}
 }

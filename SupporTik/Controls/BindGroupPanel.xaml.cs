@@ -84,6 +84,18 @@ namespace SupporTik.Controls
 			_viewModel.SaveGroupNameCommand.Execute(null);
 		}
 
+		private void BrGroupKeys_MouseDown(object sender, MouseButtonEventArgs e)
+		{
+			e.Handled = true;
+			((UIElement)sender).Focus();
+			_viewModel?.StartEditKeysCommand.Execute(null);
+		}
+
+		private void BrGroupKeys_LostFocus(object sender, RoutedEventArgs e)
+		{
+			_viewModel?.CancelEditKeysCommand.Execute(null);
+		}
+
 		#region Инлайн-редактирование строк группы (название/текст шаблона)
 
 		// Строки строятся из DataTemplate — своего code-behind у них нет, поэтому вместо
@@ -93,7 +105,11 @@ namespace SupporTik.Controls
 
 		private void RowNameInput_KeyDown(object sender, KeyEventArgs e)
 		{
-			var vm = (BindItemViewModel)((FrameworkElement)sender).DataContext;
+			var vm = ((FrameworkElement)sender).DataContext as BindItemViewModel;
+			if (vm == null)
+			{
+				return;
+			}
 
 			if (e.Key == Key.Enter)
 			{
@@ -116,8 +132,8 @@ namespace SupporTik.Controls
 				return;
 			}
 
-			var vm = (BindItemViewModel)((FrameworkElement)sender).DataContext;
-			vm.SaveNameCommand.Execute(null);
+			var vm = ((FrameworkElement)sender).DataContext as BindItemViewModel;
+			vm?.SaveNameCommand.Execute(null);
 		}
 
 		private void RowTextInput_KeyDown(object sender, KeyEventArgs e)
@@ -127,8 +143,8 @@ namespace SupporTik.Controls
 			{
 				e.Handled = true;
 				_suppressRowTextLostFocusSave = true;
-				var vm = (BindItemViewModel)((FrameworkElement)sender).DataContext;
-				vm.CancelEditTextCommand.Execute(null);
+				var vm = ((FrameworkElement)sender).DataContext as BindItemViewModel;
+				vm?.CancelEditTextCommand.Execute(null);
 			}
 		}
 
@@ -140,8 +156,33 @@ namespace SupporTik.Controls
 				return;
 			}
 
-			var vm = (BindItemViewModel)((FrameworkElement)sender).DataContext;
-			vm.SaveTextCommand.Execute(null);
+			var vm = ((FrameworkElement)sender).DataContext as BindItemViewModel;
+			vm?.SaveTextCommand.Execute(null);
+		}
+
+		// Сочетание клавиш у конкретного шаблона внутри группы — своё, независимое от
+		// общего хоткея группы (BrGroupKeys_* выше). Если задать его отличным от соседей,
+		// после SaveAndReRegister шаблон при пересборке списка (см. BindsPageViewModel.
+		// ReloadRows) сам перегруппируется — окажется отдельной карточкой или в другой группе.
+		private void RowKeys_MouseDown(object sender, MouseButtonEventArgs e)
+		{
+			e.Handled = true;
+			var element = (UIElement)sender;
+			element.Focus();
+
+			var vm = ((FrameworkElement)sender).DataContext as BindItemViewModel;
+			vm?.StartEditKeysCommand.Execute(null);
+		}
+
+		private void RowKeys_LostFocus(object sender, RoutedEventArgs e)
+		{
+			// DataContext, а не жёсткий каст: успешный захват сочетания (см.
+			// BindItemViewModel.OnKeysCaptured) синхронно поднимает RequestReload, который
+			// пересобирает весь список карточек — контейнер этой строки к моменту LostFocus
+			// уже мог быть отсоединён от ItemsControl, и WPF временно подставляет туда
+			// служебный DisconnectedItem (MS.Internal.NamedObject) вместо реальной VM
+			var vm = ((FrameworkElement)sender).DataContext as BindItemViewModel;
+			vm?.CancelEditKeysCommand.Execute(null);
 		}
 
 		#endregion

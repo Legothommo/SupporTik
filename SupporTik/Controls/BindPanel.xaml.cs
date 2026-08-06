@@ -78,5 +78,21 @@ namespace SupporTik.Controls
 
 			_viewModel?.SaveTextCommand.Execute(null);
 		}
+
+		// Фокус и запуск/отмена захвата — то, что не биндится напрямую (сам хук — целиком
+		// внутри HotkeyService, сюда приходит только Focus() для корректной LostFocus-отмены)
+		private void BrKeys_MouseDown(object sender, MouseButtonEventArgs e)
+		{
+			// Preview + пометка Handled — иначе левый клик по плашке иногда съедался
+			// раньше, чем доходил до нас (не долетал MouseDown), а правый почему-то доходил
+			e.Handled = true;
+			((UIElement)sender).Focus();
+			_viewModel?.StartEditKeysCommand.Execute(null);
+		}
+
+		private void BrKeys_LostFocus(object sender, RoutedEventArgs e)
+		{
+			_viewModel?.CancelEditKeysCommand.Execute(null);
+		}
 	}
 }

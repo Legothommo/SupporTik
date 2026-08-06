@@ -52,13 +52,31 @@
                            ToolTip="Переименовать"
                            Command="{Binding StartEditNameCommand}"/>
 
-                <Border Grid.Column="2"
+                <Border x:Name="BrKeys"
+                        Grid.Column="2"
                         Background="{StaticResource SubtleFillBrush}"
+                        BorderThickness="1"
                         CornerRadius="4"
                         Padding="8,3"
-                        Height="22">
+                        Height="22"
+                        Focusable="True"
+                        Cursor="Hand"
+                        ToolTip="Нажмите, чтобы изменить сочетание клавиш"
+                        PreviewMouseLeftButtonDown="BrKeys_MouseDown"
+                        PreviewMouseRightButtonDown="BrKeys_MouseDown"
+                        LostFocus="BrKeys_LostFocus">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="Transparent"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsEditingKeys}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource StatusActiveBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <TextBlock x:Name="TbKeys"
-                               Text="{Binding KeysDisplay}"
+                               Text="{Binding KeysDisplayText}"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                FontFamily="Consolas"
                                FontSize="12"/>

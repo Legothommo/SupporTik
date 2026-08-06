@@ -79,6 +79,11 @@
                 <ui:SymbolIcon Symbol="Apps24"/>
             </MenuItem.Icon>
         </MenuItem>
+        <MenuItem Header="Меню рекламы" Command="{Binding ShowMarketingMenuCommand}">
+            <MenuItem.Icon>
+                <ui:SymbolIcon Symbol="Megaphone24"/>
+            </MenuItem.Icon>
+        </MenuItem>
         <MenuItem Header="Настройки" Command="{Binding OpenSettingsCommand}">
             <MenuItem.Icon>
                 <ui:SymbolIcon Symbol="Settings24"/>

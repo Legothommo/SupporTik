@@ -1,6 +1,7 @@
 using Hardcodet.Wpf.TaskbarNotification;
 using SupporTik.Services;
 using System;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,6 +19,12 @@ namespace SupporTik
 
 		protected override async void OnStartup(StartupEventArgs e)
 		{
+			// .NET Framework по умолчанию держит не больше 2 одновременных подключений
+			// к одному хосту (ServicePointManager.DefaultConnectionLimit) — без этого
+			// параллельные запросы страниц кампаний/апсейлов (см. MarketingCampaignService,
+			// UpsaleService) реально шли бы по 2 за раз, вставая в очередь на HttpClient
+			ServicePointManager.DefaultConnectionLimit = 20;
+
 			var notifyIcon = (TaskbarIcon)Application.Current.FindResource("MyNotifyIcon");
 
 			try

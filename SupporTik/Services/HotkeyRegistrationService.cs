@@ -202,10 +202,21 @@ namespace SupporTik.Services
 				return;
 			}
 
+			ShowMarketingMenu();
+		}
+
+		/// <summary>
+		/// Показывает/активирует окно меню рекламы — вызывается и по хоткею (см.
+		/// OnMarketingMenuHotkeyPressed, с проверкой паузы вставки), и напрямую из
+		/// пункта трей-меню "Меню рекламы" (см. IBindsService.ShowMarketingMenu), где
+		/// пауза вставки ни при чём — это осознанный клик пользователя, а не хоткей.
+		/// </summary>
+		public void ShowMarketingMenu()
+		{
 			// Окно создаётся только один раз за всё время работы приложения — закрытие
 			// по крестику теперь лишь прячет его (см. MarketingWindow.HideAnimated), а не
 			// уничтожает, поэтому WebView2 и уже пройденный логин не сбрасываются между
-			// повторными нажатиями хоткея
+			// повторными открытиями
 			if (_marketingWindow == null)
 			{
 				_marketingWindow = new MarketingWindow();

@@ -19,6 +19,7 @@ namespace SupporTik.ViewModels
 		public ICommand OpenSettingsCommand { get; }
 		public ICommand ToggleEnabledCommand { get; }
 		public ICommand ExitCommand { get; }
+		public ICommand ShowMarketingMenuCommand { get; }
 
 		public TrayMenuViewModel(IMainWindowProvider mainWindowProvider, IBindsService bindsService)
 		{
@@ -29,6 +30,7 @@ namespace SupporTik.ViewModels
 			OpenSettingsCommand = new RelayCommand(OpenSettings);
 			ToggleEnabledCommand = new RelayCommand(ToggleEnabled);
 			ExitCommand = new RelayCommand(Exit);
+			ShowMarketingMenuCommand = new RelayCommand(_bindsService.ShowMarketingMenu);
 		}
 
 		private MainWindow EnsureMainWindow()
@@ -80,6 +82,9 @@ namespace SupporTik.ViewModels
 
 		private void Exit()
 		{
+			// Без этого MainWindow.OnClosing воспринял бы закрытие как обычное — и просто
+			// свернул бы окно в трей вместо настоящего выхода (см. MainWindow.IsExiting)
+			MainWindow.IsExiting = true;
 			Application.Current.Shutdown();
 		}
 	}

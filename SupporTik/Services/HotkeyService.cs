@@ -32,6 +32,12 @@ namespace SupporTik.Services
 		private const int VK_LWIN = 0x5B;
 		private const int VK_RWIN = 0x5C;
 
+		// Флаг в KBDLLHOOKSTRUCT.flags — событие сгенерировано программно (SendInput/keybd_event),
+		// а не реальным нажатием. TextPasteService сам шлёт синтетический Ctrl+V, чтобы выполнить
+		// вставку — без этой проверки хук ловит и глотает и его тоже, как будто это ещё одно
+		// нажатие того же бинда, поэтому вставка не доходит до целевого приложения
+		private const uint LLKHF_INJECTED = 0x00000010;
+
 		private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
 		[StructLayout(LayoutKind.Sequential)]
@@ -123,6 +129,14 @@ namespace SupporTik.Services
 			}
 
 			var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+
+			// Синтетическое нажатие (наша же имитация Ctrl+V/Ctrl+C) — не хоткей и не запись
+			// нового бинда, пропускаем как есть, иначе бинд на Ctrl+V глотает сам себя
+			if ((hookStruct.flags & LLKHF_INJECTED) != 0)
+			{
+				return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+			}
+
 			Key key = KeyInterop.KeyFromVirtualKey((int)hookStruct.vkCode);
 
 			if (IsModifierKey(key))

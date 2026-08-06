@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Windows;
 using System.Windows.Input;
 
 namespace SupporTik.ViewModels.Binds
@@ -23,6 +24,24 @@ namespace SupporTik.ViewModels.Binds
 
 		public string KeysDisplay { get; }
 		public ObservableCollection<BindItemViewModel> Items { get; } = new ObservableCollection<BindItemViewModel>();
+
+		private const string KeysCapturePlaceholder = "Нажмите сочетание клавиш...";
+
+		private bool _isEditingKeys;
+		public bool IsEditingKeys
+		{
+			get => _isEditingKeys;
+			private set
+			{
+				if (SetProperty(ref _isEditingKeys, value))
+				{
+					OnPropertyChanged(nameof(KeysDisplayText));
+				}
+			}
+		}
+
+		/// <summary>То, что реально показывается в плашке сочетания — во время записи заменяется на подсказку.</summary>
+		public string KeysDisplayText => IsEditingKeys ? KeysCapturePlaceholder : KeysDisplay;
 
 		private string _groupTitle;
 		public string GroupTitle
@@ -64,6 +83,9 @@ namespace SupporTik.ViewModels.Binds
 		public ICommand CancelRenameCommand { get; }
 		public ICommand AddToGroupCommand { get; }
 
+		public ICommand StartEditKeysCommand { get; }
+		public ICommand CancelEditKeysCommand { get; }
+
 		public BindGroupViewModel(List<BindKeys> binds, IBindsService bindsService, IMainWindowProvider mainWindowProvider)
 		{
 			_binds = binds;
@@ -86,6 +108,9 @@ namespace SupporTik.ViewModels.Binds
 			SaveGroupNameCommand = new RelayCommand(() => CloseNameEditor(save: true));
 			CancelRenameCommand = new RelayCommand(() => CloseNameEditor(save: false));
 			AddToGroupCommand = new RelayCommand(AddToGroup);
+
+			StartEditKeysCommand = new RelayCommand(StartEditKeys);
+			CancelEditKeysCommand = new RelayCommand(CancelEditKeys);
 
 			UpdateTitleDisplay();
 		}
@@ -158,6 +183,46 @@ namespace SupporTik.ViewModels.Binds
 			return _binds.Any(b =>
 				b.Name.ToLower().Contains(query) ||
 				b.Text.ToLower().Contains(query));
+		}
+
+		private void StartEditKeys()
+		{
+			IsEditingKeys = true;
+			_bindsService.StartHotkeyCapture(OnKeysCaptured);
+		}
+
+		private void CancelEditKeys()
+		{
+			if (!IsEditingKeys)
+			{
+				return;
+			}
+
+			_bindsService.CancelHotkeyCapture();
+			IsEditingKeys = false;
+		}
+
+		/// <summary>
+		/// Коллбэк хука клавиатуры — вызывается синхронно изнутри низкоуровневого хука (см.
+		/// HotkeyService.HookCallback и BindItemViewModel.OnKeysCaptured), поэтому тяжёлую
+		/// часть откладываем через Dispatcher. Сочетание общее для всей группы — меняем его
+		/// сразу у всех шаблонов группы, а не только у одного.
+		/// </summary>
+		private void OnKeysCaptured(Key key, ModifierKeys modifiers)
+		{
+			Application.Current.Dispatcher.InvokeAsync(() =>
+			{
+				foreach (var bind in _binds)
+				{
+					bind.Key = key;
+					bind.Modifiers = modifiers;
+				}
+
+				_bindsService.SaveAndReRegister();
+
+				IsEditingKeys = false;
+				RequestReload?.Invoke(this, EventArgs.Empty);
+			});
 		}
 
 		private void AddToGroup()

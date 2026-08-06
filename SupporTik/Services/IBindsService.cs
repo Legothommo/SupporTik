@@ -38,5 +38,8 @@ namespace SupporTik.Services
 
 		void StartHotkeyCapture(Action<Key, ModifierKeys> onCaptured);
 		void CancelHotkeyCapture();
+
+		/// <summary>Показывает/активирует окно меню рекламы (см. HotkeyRegistrationService.ShowMarketingMenu).</summary>
+		void ShowMarketingMenu();
 	}
 }

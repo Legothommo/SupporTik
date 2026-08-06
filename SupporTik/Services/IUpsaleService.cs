@@ -11,9 +11,10 @@ namespace SupporTik.Services
 	public interface IUpsaleService
 	{
 		/// <summary>
-		/// Проверяет апсейл для каждой кампании по очереди (один HttpClient на весь пакет).
-		/// Ошибка по отдельной кампании не прерывает остальные — для неё в результате
-		/// будет значение "Ошибка". progress получает текст вида "Апсейлы N/M...".
+		/// Проверяет апсейл по всем кампаниям параллельно (с ограничением на число
+		/// одновременных запросов, один HttpClient на весь пакет). Ошибка по отдельной
+		/// кампании не прерывает остальные — для неё в результате будет значение "Ошибка".
+		/// progress получает текст вида "Апсейлы N/M..." по мере завершения запросов.
 		/// </summary>
 		Task<Dictionary<string, string>> CheckUpsalesAsync(
 			string cookieHeader, string csrfToken, IReadOnlyList<string> campaignIds, IProgress<string> progress);

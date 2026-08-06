@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SupporTik.Classes;
@@ -18,8 +20,6 @@ namespace SupporTik.Services
 
 		public async Task<List<MarketingItem>> SearchAsync(string uid, YandexBusinessAuth auth, IProgress<string> progress)
 		{
-			var allItems = new List<MarketingItem>();
-
 			// UseCookies = false обязателен: с включённым (по умолчанию) CookieContainer
 			// HttpClient сам управляет куками и путается с вручную выставленным заголовком
 			// Cookie — сервер в ответ отвечал "Invalid csrf token", хотя сам токен был верным
@@ -29,55 +29,88 @@ namespace SupporTik.Services
 				client.DefaultRequestHeaders.Add("Cookie", auth.CookieHeader);
 				client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-				int offset = 0;
-				int total = int.MaxValue;
+				progress?.Report("Страница 1...");
+				var (firstItems, total) = await FetchPageAsync(client, uid, auth, offset: 0);
 
-				while (offset < total)
+				var allItems = new List<MarketingItem>(firstItems);
+
+				if (firstItems.Count == 0 || total <= PageSize)
 				{
-					progress?.Report($"Страница {offset / PageSize + 1}...");
+					return allItems;
+				}
 
-					string url = $"{CampaignListApiUrl}?csrfToken={Uri.EscapeDataString(auth.CsrfToken)}" +
-						$"&sessionId={Uri.EscapeDataString(auth.SessionId)}" +
-						$"&limit={PageSize}&offset={offset}" +
-						$"&userUid={Uri.EscapeDataString(uid)}" +
-						$"&managerUid={Uri.EscapeDataString(auth.ManagerUid)}";
+				// Первую страницу пришлось дождаться, чтобы узнать total — остальные не
+				// зависят друг от друга, поэтому запрашиваем их все параллельно, а не по
+				// очереди (раньше поиск при большом числе кампаний ждал по одной странице)
+				var remainingOffsets = new List<int>();
+				for (int offset = PageSize; offset < total; offset += PageSize)
+				{
+					remainingOffsets.Add(offset);
+				}
 
-					var response = await client.GetAsync(url);
+				int totalPages = remainingOffsets.Count + 1;
+				int completedPages = 1;
 
-					if (!response.IsSuccessStatusCode)
-					{
-						string errorBody = await response.Content.ReadAsStringAsync();
-						throw new HttpRequestException($"Status {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
-					}
+				var pageTasks = remainingOffsets.Select(async offset =>
+				{
+					var page = await FetchPageAsync(client, uid, auth, offset);
+					int done = Interlocked.Increment(ref completedPages);
+					progress?.Report($"Страница {done}/{totalPages}...");
+					return page;
+				});
 
-					string body = await response.Content.ReadAsStringAsync();
-					var data = JObject.Parse(body)["data"];
+				var pages = await Task.WhenAll(pageTasks);
 
-					total = data?["total"]?.Value<int>() ?? 0;
-					var results = data?["result"] as JArray;
+				foreach (var page in pages)
+				{
+					allItems.AddRange(page.Items);
+				}
 
-					if (results == null || results.Count == 0)
-					{
-						break;
-					}
+				return allItems;
+			}
+		}
 
-					foreach (var campaign in results)
-					{
-						allItems.Add(ParseCampaign(campaign, uid));
-					}
+		private async Task<(List<MarketingItem> Items, int Total)> FetchPageAsync(
+			HttpClient client, string uid, YandexBusinessAuth auth, int offset)
+		{
+			string url = $"{CampaignListApiUrl}?csrfToken={Uri.EscapeDataString(auth.CsrfToken)}" +
+				$"&sessionId={Uri.EscapeDataString(auth.SessionId)}" +
+				$"&limit={PageSize}&offset={offset}" +
+				$"&userUid={Uri.EscapeDataString(uid)}" +
+				$"&managerUid={Uri.EscapeDataString(auth.ManagerUid)}";
 
-					offset += PageSize;
+			var response = await client.GetAsync(url);
+
+			if (!response.IsSuccessStatusCode)
+			{
+				string errorBody = await response.Content.ReadAsStringAsync();
+				throw new HttpRequestException($"Status {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
+			}
+
+			string body = await response.Content.ReadAsStringAsync();
+			var data = JObject.Parse(body)["data"];
+
+			int total = data?["total"]?.Value<int>() ?? 0;
+			var results = data?["result"] as JArray;
+
+			var items = new List<MarketingItem>();
+			if (results != null)
+			{
+				foreach (var campaign in results)
+				{
+					items.Add(ParseCampaign(campaign, uid));
 				}
 			}
 
-			return allItems;
+			return (items, total);
 		}
 
 		private static MarketingItem ParseCampaign(JToken campaign, string uid)
 		{
-			// "id" — собственный числовой ID кампании, не пермалинк (разные числа) —
-			// пермалинк лежит в companyDescription
+			// "id" — собственный числовой ID кампании (используется для ссылки "Открыть"),
+			// пермалинк компании — отдельное число, лежит в companyDescription
 			string permalink = campaign["id"]?.ToString() ?? string.Empty;
+			string companyPermalink = campaign["companyDescription"]?["permalink"]?.ToString() ?? string.Empty;
 
 			int? remainingSum = campaign["remainingSum"]?.Value<int?>();
 			int? remainingDays = campaign["remainingDays"]?.Value<int?>();
@@ -88,6 +121,7 @@ namespace SupporTik.Services
 			return new MarketingItem
 			{
 				Permalink = permalink,
+				CompanyPermalink = companyPermalink,
 				Status = MapStatus(campaign["status"]?.Value<string>()),
 				Remain = remain,
 				Href = string.IsNullOrEmpty(permalink) ? null : string.Format(CampaignOpenUrlTemplate, permalink),

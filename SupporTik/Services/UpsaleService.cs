@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -18,10 +21,15 @@ namespace SupporTik.Services
 		private const string Url = "https://datalens.yandex-team.ru/api/run";
 		private const string DashboardReferer = "https://datalens.yandex-team.ru/qniendwn7xvwg-apseyl-po-nomeram-rk?tab=OW";
 
+		// Раньше кампании проверялись строго по очереди (одна за другой) — на десятках
+		// кампаний это была основная задержка "Проверить апсейлы". Ограничение вместо
+		// полного распараллеливания — чтобы не долбить DataLens сотнями запросов разом
+		private const int MaxConcurrentRequests = 5;
+
 		public async Task<Dictionary<string, string>> CheckUpsalesAsync(
 			string cookieHeader, string csrfToken, IReadOnlyList<string> campaignIds, IProgress<string> progress)
 		{
-			var results = new Dictionary<string, string>();
+			var results = new ConcurrentDictionary<string, string>();
 
 			var handler = new HttpClientHandler
 			{
@@ -29,6 +37,7 @@ namespace SupporTik.Services
 			};
 
 			using (var client = new HttpClient(handler))
+			using (var throttle = new SemaphoreSlim(MaxConcurrentRequests))
 			{
 				client.DefaultRequestHeaders.Add("Cookie", cookieHeader);
 				client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
@@ -38,11 +47,11 @@ namespace SupporTik.Services
 				client.DefaultRequestHeaders.Add("X-DL-TenantId", "common");
 				client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-				for (int i = 0; i < campaignIds.Count; i++)
-				{
-					string campaignId = campaignIds[i];
-					progress?.Report($"Апсейлы {i + 1}/{campaignIds.Count}...");
+				int completed = 0;
 
+				var tasks = campaignIds.Select(async campaignId =>
+				{
+					await throttle.WaitAsync();
 					try
 					{
 						results[campaignId] = await GetUpsaleAsync(client, campaignId);
@@ -52,10 +61,18 @@ namespace SupporTik.Services
 						Debug.WriteLine($"campaign_id={campaignId}: ошибка проверки апсейла — {ex.Message}");
 						results[campaignId] = "Ошибка";
 					}
-				}
+					finally
+					{
+						int done = Interlocked.Increment(ref completed);
+						progress?.Report($"Апсейлы {done}/{campaignIds.Count}...");
+						throttle.Release();
+					}
+				});
+
+				await Task.WhenAll(tasks);
 			}
 
-			return results;
+			return new Dictionary<string, string>(results);
 		}
 
 		private static async Task<string> GetUpsaleAsync(HttpClient client, string campaignId)
@@ -100,7 +117,7 @@ namespace SupporTik.Services
 				var cell = doc["data"]["rows"][0]["cells"][1]["value"];
 				return cell.Type == JTokenType.Null ? null : cell.ToString();
 			}
-			catch
+			catch (Exception)
 			{
 				return "Нет данных";
 			}

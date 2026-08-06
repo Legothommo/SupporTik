@@ -55,7 +55,8 @@ namespace SupporTik.Views
 			var campaignService = new MarketingCampaignService();
 			var notificationService = new NotificationServiceAdapter();
 			var upsaleService = new UpsaleService();
-			_viewModel = new MarketingWindowViewModel(campaignService, notificationService, upsaleService, EnsureDataLensAuthAsync, GetYandexBusinessAuthAsync);
+			var budgetService = new BudgetService();
+			_viewModel = new MarketingWindowViewModel(campaignService, notificationService, upsaleService, budgetService, EnsureDataLensAuthAsync, GetYandexBusinessAuthAsync);
 			DataContext = _viewModel;
 
 			Loaded += MarketingWindow_Loaded;
@@ -123,6 +124,13 @@ namespace SupporTik.Views
 
 		#region Авторизация (WebView2-проводка — View-специфичная логика)
 
+		// Без кэша каждый поиск/проверка апсейлов заново гоняли WebView2 через полную
+		// загрузку страницы, даже если сессия только что была подтверждена — секунды на
+		// пустом месте. forceRefresh (см. ниже) даёт ViewModel возможность попросить
+		// перезайти заново, если запрос с кэшированным токеном всё же не сработал.
+		private YandexBusinessAuth _cachedYandexAuth;
+		private (string CookieHeader, string CsrfToken)? _cachedDataLensAuth;
+
 		private async Task InitializeAsync()
 		{
 			_viewModel.IsSearchUiVisible = true;
@@ -137,8 +145,13 @@ namespace SupporTik.Views
 		/// на дашборд и окно логина не покажется вовсе; если нет — ждём редиректа
 		/// на страницу логина и затем перехода обратно после того, как пользователь войдёт.
 		/// </summary>
-		private async Task<(string CookieHeader, string CsrfToken)> EnsureDataLensAuthAsync()
+		private async Task<(string CookieHeader, string CsrfToken)> EnsureDataLensAuthAsync(bool forceRefresh)
 		{
+			if (!forceRefresh && _cachedDataLensAuth.HasValue)
+			{
+				return _cachedDataLensAuth.Value;
+			}
+
 			await webView.EnsureCoreWebView2Async();
 
 			TbLoginStatus.Text = "Проверяем авторизацию в DataLens...";
@@ -177,7 +190,9 @@ namespace SupporTik.Views
 			string cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
 			string csrfToken = cookies.FirstOrDefault(c => c.Name == "CSRF-TOKEN")?.Value ?? string.Empty;
 
-			return (cookieHeader, csrfToken);
+			var result = (cookieHeader, csrfToken);
+			_cachedDataLensAuth = result;
+			return result;
 		}
 
 		/// <summary>
@@ -188,8 +203,13 @@ namespace SupporTik.Views
 		/// истекла — WebView2 общий с DataLens и мог успеть уйти на другой домен), а затем
 		/// достаём значения через ExecuteScriptAsync из уже отрисованной страницы.
 		/// </summary>
-		private async Task<YandexBusinessAuth> GetYandexBusinessAuthAsync()
+		private async Task<YandexBusinessAuth> GetYandexBusinessAuthAsync(bool forceRefresh)
 		{
+			if (!forceRefresh && _cachedYandexAuth != null)
+			{
+				return _cachedYandexAuth;
+			}
+
 			await webView.EnsureCoreWebView2Async();
 
 			TbLoginStatus.Text = "Проверяем авторизацию...";
@@ -245,7 +265,9 @@ namespace SupporTik.Views
 			string sessionId = data.Value<string>("sessionId") ?? string.Empty;
 			string managerUid = data.Value<string>("managerUid") ?? string.Empty;
 
-			return new YandexBusinessAuth(cookieHeader, csrfToken, sessionId, managerUid);
+			var auth = new YandexBusinessAuth(cookieHeader, csrfToken, sessionId, managerUid);
+			_cachedYandexAuth = auth;
+			return auth;
 		}
 
 		#endregion
@@ -258,6 +280,16 @@ namespace SupporTik.Views
 		private void BtnStatusFilter_Click(object sender, RoutedEventArgs e)
 		{
 			StatusFilterPopup.IsOpen = !StatusFilterPopup.IsOpen;
+		}
+
+		private void BtnRoleFilter_Click(object sender, RoutedEventArgs e)
+		{
+			RoleFilterPopup.IsOpen = !RoleFilterPopup.IsOpen;
+		}
+
+		private void BtnUpsaleFilter_Click(object sender, RoutedEventArgs e)
+		{
+			UpsaleFilterPopup.IsOpen = !UpsaleFilterPopup.IsOpen;
 		}
 
 		/// <summary>

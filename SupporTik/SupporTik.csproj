@@ -60,6 +60,7 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Classes\BindKeys.cs" />
+    <Compile Include="Classes\BulkObservableCollection.cs" />
     <Compile Include="Classes\MarketingItem.cs" />
     <Compile Include="Classes\YandexBusinessAuth.cs" />
     <Compile Include="Classes\QuickMenuEntry.cs" />
@@ -112,6 +113,8 @@
     <Compile Include="Services\INotificationService.cs" />
     <Compile Include="Services\IUpsaleService.cs" />
     <Compile Include="Services\UpsaleService.cs" />
+    <Compile Include="Services\IBudgetService.cs" />
+    <Compile Include="Services\BudgetService.cs" />
     <Compile Include="Services\IThemeService.cs" />
     <Compile Include="Services\ThemeService.cs" />
     <Compile Include="Services\NotificationServiceAdapter.cs" />
@@ -128,7 +131,7 @@
     <Compile Include="ViewModels\QuickMenuViewModel.cs" />
     <Compile Include="ViewModels\TrayMenuViewModel.cs" />
     <Compile Include="ViewModels\MarketingItemViewModel.cs" />
-    <Compile Include="ViewModels\StatusFilterOption.cs" />
+    <Compile Include="ViewModels\FilterOption.cs" />
     <Compile Include="ViewModels\MarketingWindowViewModel.cs" />
     <Compile Include="Converters\MarketingStatusConverters.cs" />
     <Compile Include="Converters\InverseBooleanToVisibilityConverter.cs" />

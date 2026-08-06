@@ -54,6 +54,10 @@ namespace SupporTik.Styles
 
 		private void ExitApplication(object sender, RoutedEventArgs e)
 		{
+			// Без этого MainWindow.OnClosing воспринял бы закрытие как обычное — и просто
+			// свернул бы окно в трей вместо настоящего выхода (см. MainWindow.IsExiting)
+			MainWindow.IsExiting = true;
+
 			_notifyIcon?.Dispose();
 
 			Application.Current.Shutdown();

@@ -4,10 +4,13 @@ using SupporTik.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 
 namespace SupporTik.ViewModels
@@ -17,28 +20,53 @@ namespace SupporTik.ViewModels
 		private readonly IMarketingCampaignService _campaignService;
 		private readonly INotificationService _notificationService;
 		private readonly IUpsaleService _upsaleService;
+		private readonly IBudgetService _budgetService;
 
 		/// <summary>
 		/// Авторизация в DataLens — отдельный сайт (datalens.yandex-team.ru) со своей
 		/// сессией, показ окна логина требует WebView2 (View-специфичная логика),
-		/// поэтому передаётся сюда как делегат, а не делается напрямую из VM.
+		/// поэтому передаётся сюда как делегат, а не делается напрямую из VM. View сам
+		/// кэширует результат между вызовами — bool здесь просит его обновить кэш заново
+		/// (используем, если запрос с закэшированным токеном всё же не сработал).
 		/// </summary>
-		private readonly Func<Task<(string CookieHeader, string CsrfToken)>> _ensureDataLensAuth;
+		private readonly Func<bool, Task<(string CookieHeader, string CsrfToken)>> _ensureDataLensAuth;
 
 		/// <summary>
 		/// Куки/CSRF-токен уже авторизованной страницы yandex.ru/business — для прямых
-		/// API-запросов за списком кампаний. Тем же приёмом, что и для DataLens (делегат,
-		/// а не прямой доступ к WebView2 из VM).
+		/// API-запросов за списком кампаний. Тем же приёмом, что и для DataLens (делегат
+		/// с кэшем на стороне View, а не прямой доступ к WebView2 из VM).
 		/// </summary>
-		private readonly Func<Task<YandexBusinessAuth>> _getYandexBusinessAuth;
+		private readonly Func<bool, Task<YandexBusinessAuth>> _getYandexBusinessAuth;
 
-		// Полный список последнего поиска — фильтр по статусу просто перерисовывает
-		// карточки из этого списка, заново парсить страницу не нужно
+		private static readonly Regex RenewalDaysRegex = new Regex(@"\d+");
+
+		// Проверка продления теперь обычный HTTP-запрос (см. BudgetService —
+		// csrfToken/sessionId конкретной кампании достаются прямо из HTML её страницы без
+		// WebView2/JS), поэтому идёт с ограниченной параллельностью, а не строго по очереди
+		private const int MaxConcurrentRenewalChecks = 5;
+
+		// Полный список последнего поиска (сырые данные) — из него строятся варианты
+		// фильтров (RebuildFilters) и создаются карточки-VM ровно один раз за поиск
 		private readonly List<MarketingItem> _allItems = new List<MarketingItem>();
 
-		private CancellationTokenSource _filterCts;
+		// BulkObservableCollection.ReplaceRange поднимает одно-единственное уведомление
+		// (Reset) вместо Clear()+N×Add() — так весь список после поиска выводится одним
+		// куском, а не через N отдельных перестроений разметки
+		private readonly BulkObservableCollection<MarketingItemViewModel> _items =
+			new BulkObservableCollection<MarketingItemViewModel>();
 
-		public ObservableCollection<MarketingItemViewModel> Items { get; } = new ObservableCollection<MarketingItemViewModel>();
+		public ObservableCollection<MarketingItemViewModel> Items => _items;
+
+		/// <summary>
+		/// Отфильтрованное представление Items — карточки под текущим фильтром меняются
+		/// через ItemsView.Refresh() (пересчёт предиката FilterItem над уже существующими
+		/// VM), а не через пересоздание Items. Раньше при каждом изменении фильтра ВСЕ
+		/// MarketingItemViewModel пересоздавались заново (дорого — на большом списке
+		/// заметно подвисало) и коллекция перестраивалась через Clear()+N×Add() (каждый
+		/// Add — отдельная перерисовка). Теперь VM создаются один раз за поиск (см.
+		/// SearchAsync), а фильтрация — это просто Refresh() поверх них.
+		/// </summary>
+		public ICollectionView ItemsView { get; }
 
 		private string _uid = string.Empty;
 		public string Uid
@@ -59,13 +87,37 @@ namespace SupporTik.ViewModels
 		/// сразу несколько. Список строится заново из реально спарсенных данных
 		/// (см. RebuildStatusFilters), а не захардкожен заранее.
 		/// </summary>
-		public ObservableCollection<StatusFilterOption> StatusFilters { get; } = new ObservableCollection<StatusFilterOption>();
+		public ObservableCollection<FilterOption> StatusFilters { get; } = new ObservableCollection<FilterOption>();
+
+		/// <summary>Роль пользователя в кампании ("Владелец"/"Наблюдатель"/...) — тот же принцип, что и StatusFilters.</summary>
+		public ObservableCollection<FilterOption> RoleFilters { get; } = new ObservableCollection<FilterOption>();
+
+		/// <summary>
+		/// "Не проверено" / "Есть апсейл" / "Нет апсейла" (см. MarketingItem.UpsaleCategory) —
+		/// перестраивается не только после поиска, но и после каждой проверки апсейлов
+		/// (см. CheckUpsalesForItemsAsync), поскольку категории карточек меняются со временем.
+		/// </summary>
+		public ObservableCollection<FilterOption> UpsaleFilters { get; } = new ObservableCollection<FilterOption>();
 
 		private string _statusFilterSummary;
 		public string StatusFilterSummary
 		{
 			get => _statusFilterSummary;
 			private set => SetProperty(ref _statusFilterSummary, value);
+		}
+
+		private string _roleFilterSummary;
+		public string RoleFilterSummary
+		{
+			get => _roleFilterSummary;
+			private set => SetProperty(ref _roleFilterSummary, value);
+		}
+
+		private string _upsaleFilterSummary;
+		public string UpsaleFilterSummary
+		{
+			get => _upsaleFilterSummary;
+			private set => SetProperty(ref _upsaleFilterSummary, value);
 		}
 
 		private string _searchButtonLabel = "Поиск";
@@ -79,13 +131,39 @@ namespace SupporTik.ViewModels
 		public bool IsSearching
 		{
 			get => _isSearching;
-			private set => SetProperty(ref _isSearching, value);
+			private set
+			{
+				if (SetProperty(ref _isSearching, value))
+				{
+					OnPropertyChanged(nameof(IsNotSearching));
+				}
+			}
 		}
+
+		/// <summary>
+		/// Инверсия IsSearching для IsEnabled в XAML — блокирует карточки, фильтры и кнопки
+		/// действий, пока идёт поиск рекламных кампаний (SearchAsync) или проверка апсейлов
+		/// (CheckUpsalesAsync) — оба метода используют одно и то же IsSearching.
+		/// </summary>
+		public bool IsNotSearching => !IsSearching;
+
 		private bool _nothingToSearch;
 		public bool NothingToSearch
 		{
 			get => _nothingToSearch;
 			private set => SetProperty(ref _nothingToSearch, value);
+		}
+
+		private bool _lazyUpsaleCheck;
+		/// <summary>
+		/// "Ленивая" проверка — если включена, сразу после поиска (SearchAsync) все найденные
+		/// карточки проходят проверку апсейлов (как CheckUpsalesCommand, но без выделения —
+		/// на всех найденных), после чего фильтр по апсейлу сужается только до "Апсейлы"/"Продления".
+		/// </summary>
+		public bool LazyUpsaleCheck
+		{
+			get => _lazyUpsaleCheck;
+			set => SetProperty(ref _lazyUpsaleCheck, value);
 		}
 
 		private const string ResultsCountLabel = "Количество рекламных кампаний: ";
@@ -107,8 +185,9 @@ namespace SupporTik.ViewModels
 		private bool _selectAll;
 		/// <summary>
 		/// Не синхронизируется обратно, если пользователь вручную снял галку с одной
-		/// карточки — это просто переключатель "отметить/снять все", а не отражение
-		/// текущего состояния выбора.
+		/// карточки — это просто переключатель "отметить/снять все". Проходит только по
+		/// ItemsView (видимым под текущим фильтром карточкам), а не по всему Items —
+		/// иначе скрытые фильтром карточки тоже незаметно попадали бы в выделение.
 		/// </summary>
 		public bool SelectAll
 		{
@@ -117,7 +196,7 @@ namespace SupporTik.ViewModels
 			{
 				if (SetProperty(ref _selectAll, value))
 				{
-					foreach (var item in Items)
+					foreach (MarketingItemViewModel item in ItemsView)
 					{
 						item.IsSelected = value;
 					}
@@ -128,78 +207,180 @@ namespace SupporTik.ViewModels
 		public ICommand SearchCommand { get; }
 		public ICommand CopySelectedCommand { get; }
 		public ICommand CheckUpsalesCommand { get; }
+		public ICommand CopySelectedUpsalesCommand { get; }
+
+		// Кэш авторизации живёт во View между вызовами — если запрос всё же упал (сессия
+		// протухла), просим View обновить его заново при следующей попытке, а не каждый раз
+		private bool _forceRefreshYandexAuth;
+		private bool _forceRefreshDataLensAuth;
+
+		// Пока true — OnXFilterChanged не запускает Refresh на каждое отдельное изменение
+		// галки. Без этого RebuildFilters/ShowOffersOnly, меняющие сразу несколько галок
+		// подряд, гоняли бы фильтрацию по разу на каждую из них
+		private bool _suspendFiltering;
 
 		public MarketingWindowViewModel(
 			IMarketingCampaignService campaignService,
 			INotificationService notificationService,
 			IUpsaleService upsaleService,
-			Func<Task<(string CookieHeader, string CsrfToken)>> ensureDataLensAuth,
-			Func<Task<YandexBusinessAuth>> getYandexBusinessAuth)
+			IBudgetService budgetService,
+			Func<bool, Task<(string CookieHeader, string CsrfToken)>> ensureDataLensAuth,
+			Func<bool, Task<YandexBusinessAuth>> getYandexBusinessAuth)
 		{
 			_campaignService = campaignService;
 			_notificationService = notificationService;
 			_upsaleService = upsaleService;
+			_budgetService = budgetService;
 			_ensureDataLensAuth = ensureDataLensAuth;
 			_getYandexBusinessAuth = getYandexBusinessAuth;
 
+			ItemsView = CollectionViewSource.GetDefaultView(_items);
+			ItemsView.Filter = FilterItem;
+
 			UpdateStatusFilterSummary();
+			UpdateRoleFilterSummary();
+			UpdateUpsaleFilterSummary();
 
 			SearchCommand = new AsyncRelayCommand(SearchAsync);
 			CopySelectedCommand = new RelayCommand(CopySelected);
 			CheckUpsalesCommand = new AsyncRelayCommand(CheckUpsalesAsync);
+			CopySelectedUpsalesCommand = new RelayCommand(CopySelectedUpsales);
 		}
 
 		private void OnStatusFilterChanged()
 		{
 			UpdateStatusFilterSummary();
-			_ = ApplyFilterAsync();
+
+			if (!_suspendFiltering)
+			{
+				RefreshItemsView();
+			}
 		}
 
-		private void UpdateStatusFilterSummary()
+		private void OnRoleFilterChanged()
 		{
-			if (StatusFilters.Count == 0)
+			UpdateRoleFilterSummary();
+
+			if (!_suspendFiltering)
 			{
-				StatusFilterSummary = "Статус";
-				return;
+				RefreshItemsView();
+			}
+		}
+
+		private void OnUpsaleFilterChanged()
+		{
+			UpdateUpsaleFilterSummary();
+
+			if (!_suspendFiltering)
+			{
+				RefreshItemsView();
+			}
+		}
+
+		private void UpdateStatusFilterSummary() =>
+			StatusFilterSummary = BuildFilterSummary(StatusFilters, "Статус", "Все статусы", "Статус не выбран");
+
+		private void UpdateRoleFilterSummary() =>
+			RoleFilterSummary = BuildFilterSummary(RoleFilters, "Роль", "Все роли", "Роль не выбрана");
+
+		private void UpdateUpsaleFilterSummary() =>
+			UpsaleFilterSummary = BuildFilterSummary(UpsaleFilters, "Апсейл", "Все варианты", "Ничего не выбрано");
+
+		private static string BuildFilterSummary(ObservableCollection<FilterOption> filters, string placeholder, string allLabel, string noneLabel)
+		{
+			if (filters.Count == 0)
+			{
+				return placeholder;
 			}
 
-			var selected = StatusFilters.Where(f => f.IsSelected).ToList();
+			var selected = filters.Where(f => f.IsSelected).ToList();
 
-			if (selected.Count == StatusFilters.Count)
+			if (selected.Count == filters.Count)
 			{
-				StatusFilterSummary = "Все статусы";
+				return allLabel;
 			}
-			else if (selected.Count == 0)
+
+			if (selected.Count == 0)
 			{
-				StatusFilterSummary = "Статус не выбран";
+				return noneLabel;
 			}
-			else
-			{
-				StatusFilterSummary = string.Join(", ", selected.Select(f => f.Status));
-			}
+
+			return string.Join(", ", selected.Select(f => f.Value));
 		}
 
 		/// <summary>
-		/// Перестраивает список статусов для фильтра из реально спарсенных данных — берёт
-		/// уникальные значения из _allItems. Вызывается после каждого нового поиска, старые
-		/// галки (в том числе от предыдущего UID с другим набором статусов) не переносятся —
-		/// каждый статус из нового результата по умолчанию виден.
+		/// Перестраивает панель фильтра из реально спарсенных данных — берёт уникальные
+		/// значения из _allItems по selector. Старые галки не переносятся, каждое новое
+		/// значение по умолчанию видно. _suspendFiltering на время Clear()+N×Add() — иначе
+		/// каждая добавленная галка (IsSelected = true в конструкторе FilterOption не
+		/// поднимает onChanged, но следующие изменения тех же галок извне — поднимали бы).
 		/// </summary>
+		private void RebuildFilters(ObservableCollection<FilterOption> filters, Func<MarketingItem, string> selector, Action onChanged)
+		{
+			_suspendFiltering = true;
+
+			try
+			{
+				filters.Clear();
+
+				var distinctValues = _allItems
+					.Select(selector)
+					.Where(v => !string.IsNullOrEmpty(v))
+					.Distinct();
+
+				foreach (var value in distinctValues)
+				{
+					filters.Add(new FilterOption(value, true, onChanged));
+				}
+			}
+			finally
+			{
+				_suspendFiltering = false;
+			}
+		}
+
 		private void RebuildStatusFilters()
 		{
-			StatusFilters.Clear();
-
-			var distinctStatuses = _allItems
-				.Select(i => i.Status)
-				.Where(s => !string.IsNullOrEmpty(s))
-				.Distinct();
-
-			foreach (var status in distinctStatuses)
-			{
-				StatusFilters.Add(new StatusFilterOption(status, true, OnStatusFilterChanged));
-			}
-
+			RebuildFilters(StatusFilters, i => i.Status, OnStatusFilterChanged);
 			UpdateStatusFilterSummary();
+		}
+
+		private void RebuildRoleFilters()
+		{
+			RebuildFilters(RoleFilters, i => i.Role, OnRoleFilterChanged);
+			UpdateRoleFilterSummary();
+		}
+
+		private void RebuildUpsaleFilters()
+		{
+			RebuildFilters(UpsaleFilters, i => i.UpsaleCategory, OnUpsaleFilterChanged);
+			UpdateUpsaleFilterSummary();
+		}
+
+		/// <summary>Предикат ICollectionView — вызывается WPF для каждой карточки при ItemsView.Refresh().</summary>
+		private bool FilterItem(object obj)
+		{
+			var item = (MarketingItemViewModel)obj;
+
+			return IsFilterVisible(StatusFilters, item.StatusKey)
+				&& IsFilterVisible(RoleFilters, item.Role)
+				&& IsFilterVisible(UpsaleFilters, item.UpsaleCategory);
+		}
+
+		/// <summary>
+		/// Пересчитывает предикат фильтра поверх уже существующих карточек (без создания
+		/// новых MarketingItemViewModel и без Clear()/Add() коллекции) и обновляет счётчик.
+		/// </summary>
+		private void RefreshItemsView()
+		{
+			ItemsView.Refresh();
+			ResultsCountText = ResultsCountLabel + ItemsView.Cast<object>().Count();
+		}
+
+		private static bool IsFilterVisible(ObservableCollection<FilterOption> filters, string value)
+		{
+			var option = filters.FirstOrDefault(f => f.Value == value);
+			return option?.IsSelected ?? true; // неизвестное значение — показываем, чтобы не терять данные
 		}
 
 		private async Task SearchAsync()
@@ -218,7 +399,8 @@ namespace SupporTik.ViewModels
 
 			try
 			{
-				YandexBusinessAuth auth = await _getYandexBusinessAuth();
+				YandexBusinessAuth auth = await _getYandexBusinessAuth(_forceRefreshYandexAuth);
+				_forceRefreshYandexAuth = false;
 
 				if (string.IsNullOrEmpty(auth.CsrfToken))
 				{
@@ -231,13 +413,47 @@ namespace SupporTik.ViewModels
 
 				_allItems.Clear();
 				_allItems.AddRange(items);
-				NothingToSearch = _allItems.Count == 0 ? true : false;
+				NothingToSearch = _allItems.Count == 0;
+
+				if (NothingToSearch)
+				{
+					_notificationService.ShowBalloon("Ничего не найдено", $"У пользователя {uid} нет рекламных кампаний — проверьте UID.", isWarning: true);
+				}
+
+				// Карточки-VM создаются здесь РОВНО ОДИН РАЗ на весь поиск (не при каждом
+				// изменении фильтра, как было раньше) — в фоновом потоке, чтобы создание
+				// сотен объектов не занимало UI-поток, и разом кладутся в коллекцию через
+				// ReplaceRange (одно уведомление вместо N)
+				var notificationService = _notificationService;
+				List<MarketingItemViewModel> vms = await Task.Run(() =>
+					_allItems.Select(item => new MarketingItemViewModel(item, notificationService)).ToList());
+
+				_items.ReplaceRange(vms);
+
 				RebuildStatusFilters();
-				await ApplyFilterAsync();
+				RebuildRoleFilters();
+				RebuildUpsaleFilters();
+				RefreshItemsView();
+
+				if (LazyUpsaleCheck && _allItems.Count > 0)
+				{
+					var lazyCheckItems = Items
+						.Where(i => i.StatusKey == "Активна" || i.StatusKey == "Завершена")
+						.ToList();
+
+					if (lazyCheckItems.Count > 0)
+					{
+						await CheckUpsalesForItemsAsync(lazyCheckItems, progress);
+						ShowOffersOnly();
+					}
+				}
 			}
 
 			catch (Exception ex)
 			{
+				// Кэш токена (см. MarketingWindow.EnsureDataLensAuthAsync/GetYandexBusinessAuthAsync)
+				// мог протухнуть — при следующей попытке просим View обновить его заново
+				_forceRefreshYandexAuth = true;
 				_notificationService.ShowBalloon("Ошибка", ex.Message, isWarning: true);
 			}
 			finally
@@ -247,59 +463,39 @@ namespace SupporTik.ViewModels
 			}
 		}
 
-		private async Task ApplyFilterAsync()
+		/// <summary>
+		/// Сужает фильтр по апсейлу до "Апсейлы"/"Продления" и фильтр по статусу до
+		/// "Активна"/"Завершена" (те же статусы, что и в самой ленивой проверке, см.
+		/// SearchAsync) — используется после ленивой проверки (LazyUpsaleCheck), чтобы сразу
+		/// показать только реально проверенные карточки с предложением. _suspendFiltering
+		/// на время обоих foreach — иначе каждое отдельное изменение галки запускало бы
+		/// свой Refresh (с 6 статусами и несколькими вариантами апсейла — до десятка раз
+		/// подряд); в конце один RefreshItemsView() на всё сразу.
+		/// </summary>
+		private void ShowOffersOnly()
 		{
-			// Быстрое переключение чекбоксов фильтра запускает новый проход раньше, чем
-			// предыдущий (он "тикает" по Task.Delay между партиями) успел закончиться —
-			// без отмены оба одновременно дёргали бы Items.Clear()/Add() вперемешку
-			_filterCts?.Cancel();
-			var cts = new CancellationTokenSource();
-			_filterCts = cts;
-			CancellationToken token = cts.Token;
-
-			// Карточки ниже пересоздаются заново (каждая начинается с IsSelected = false),
-			// так что старое выделение всё равно теряется — синхронизируем и галку "Выбрать
-			// все" тем же способом, напрямую через поле, чтобы не запускать её собственный
-			// сеттер (Items в этот момент как раз пустой/перестраивается)
-			if (_selectAll)
-			{
-				_selectAll = false;
-				OnPropertyChanged(nameof(SelectAll));
-			}
-
-			Items.Clear();
-			int count = 0;
-			ResultsCountText = ResultsCountLabel + count;
+			_suspendFiltering = true;
 
 			try
 			{
-				int i = 0;
-
-				foreach (var item in _allItems)
+				foreach (var option in StatusFilters)
 				{
-					if (IsStatusVisible(item.Status))
-					{
-						Items.Add(new MarketingItemViewModel(item, _notificationService));
-						count++;
-						ResultsCountText = ResultsCountLabel + count;
-					}
+					option.IsSelected = option.Value == "Активна" || option.Value == "Завершена";
+				}
 
-					if (++i % 5 == 0)
-					{
-						await Task.Delay(1, token);
-					}
+				foreach (var option in UpsaleFilters)
+				{
+					option.IsSelected = option.Value == "Апсейлы" || option.Value == "Продления";
 				}
 			}
-			catch (OperationCanceledException)
+			finally
 			{
-				// Более свежий вызов ApplyFilterAsync уже отменил этот проход — ничего страшного
+				_suspendFiltering = false;
 			}
-		}
 
-		private bool IsStatusVisible(string status)
-		{
-			var option = StatusFilters.FirstOrDefault(f => f.Status == status);
-			return option?.IsSelected ?? true; // неизвестный статус — показываем, чтобы не терять данные
+			UpdateStatusFilterSummary();
+			UpdateUpsaleFilterSummary();
+			RefreshItemsView();
 		}
 
 		private void CopySelected()
@@ -321,6 +517,103 @@ namespace SupporTik.ViewModels
 			_notificationService.ShowBalloon("Скопировано", $"Пермалинков в буфере: {permalinks.Count}", isWarning: false);
 		}
 
+		/// <summary>
+		/// Собирает текст предложения (см. MarketingItemViewModel.BuildUpsaleText) по всем
+		/// отмеченным карточкам и кладёт в буфер одним куском — тот же принцип отбора, что
+		/// и у CheckUpsalesCommand/CopySelectedCommand (Items.Where(i => i.IsSelected)).
+		/// </summary>
+		private void CopySelectedUpsales()
+		{
+			var selected = Items.Where(i => i.IsSelected).ToList();
+
+			if (selected.Count == 0)
+			{
+				_notificationService.ShowBalloon("Предупреждение", "Отметьте хотя бы одну карточку.", isWarning: true);
+				return;
+			}
+
+			var text = BuildUpsalesText(selected);
+			if (text != null)
+			{
+				Clipboard.SetText(text);
+				_notificationService.ShowBalloon("Скопировано", $"Текстов в буфере: {selected.Count}", isWarning: false);
+			}
+		}
+
+		public string BuildUpsalesText(List<MarketingItemViewModel> items)
+		{
+			if (items == null || items.Count == 0)
+				return null;
+
+			var hasOneRole = items
+				.Select(x => x.Role)
+				.Distinct();
+
+			if (hasOneRole.Count() != 1) { _notificationService.ShowBalloon("Предупреждение", "Нельзя выбирать разные роли.", isWarning: true); return null; }
+
+			// Проверяем ДО .Contains ниже — у "Не проверено"/"Нет предложения"/"Не продавать"
+			// UpsaleValue либо null, либо не содержит "Продление", иначе .Contains упадёт на null
+			bool hasUpsale = items.All(x =>
+				!string.IsNullOrEmpty(x.UpsaleValue) &&
+				x.UpsaleValue != "Нет предложения" &&
+				x.UpsaleValue != "Проверь в ЛК" &&
+				x.UpsaleValue != "Не продавать");
+
+			if (!hasUpsale) { _notificationService.ShowBalloon("Предупреждение", "Выбери кампании с предложениями", isWarning: true); return null; }
+
+			bool allUpsalesAreInt = items.All(x => int.TryParse(x.UpsaleValue, out _));
+			bool allUpsalesAreString = items.All(x => x.UpsaleValue.Contains("Продление"));
+
+			if (!allUpsalesAreInt && !allUpsalesAreString) { _notificationService.ShowBalloon("Предупреждение", "Нельзя выбирать разные предложения.", isWarning: true); return null; }
+
+			var result = string.Empty;
+			var firstStroke = string.Empty;
+			var secondStroke = string.Empty;
+
+			if (allUpsalesAreInt)
+			{
+				firstStroke = string.Join("\r\n\r\n",
+					items.Select(item => $"- https://yandex.ru/business/subscription/campaign/{item.DisplayPermalink}?upsale_budget={item.UpsaleValue}&show_popup=upsale"));
+
+				result = $"Мы заметили, что вам доступны увеличения бюджета для ваших рекламных кампаний. Увеличьте месячный бюджет на продвижения, чтобы повысить их охват:\r\n\r\n" +
+					$"{firstStroke}\r\n\r\n" +
+					$"Алгоритм подбирает площадки и публикует объявления в пределах бюджета, который вы выбрали. Если его увеличить, объявления будут публиковаться чаще и на новых площадках. Это расширит клиентскую базу — об организации узнает больше пользователей.";
+
+				if (hasOneRole.First() == "Наблюдатель")
+				{
+					result += "\r\n\r\nПодробности отправим на почту владельца продвижения. Предложение действует 7 дней";
+				}
+			}
+			if (allUpsalesAreString)
+			{
+				firstStroke = string.Join("\r\n\r\n",
+						items.Select(item => $"- № {item.DisplayPermalink}")) + ".";
+				secondStroke = string.Join("\r\n\r\n",
+					items.Select(item =>
+					{
+						int days = int.Parse(item.UpsaleValue.Split(' ')[1]);
+						return $"- № {item.DisplayPermalink} на {days} дней - {item.AmountUpsale} ₽";
+					})) + ".";
+
+				if (hasOneRole.First() == "Наблюдатель")
+				{
+					result = $"Мы заметили, что скоро завершатся кампании по продвижению:\r\n\r\n" +
+						$"{firstStroke}\r\n\r\n" +
+						$"Продлите их, чтобы избежать перерыва в показах.\r\n\r\n" +
+						$"Отправим подробности владельцам кампаний на почту";
+				}
+				else
+				{
+					result = $"Мы заметили, что скоро завершатся кампании ваши по продвижению:\r\n\r\n" +
+						$"{firstStroke}\r\n\r\n" +
+						$"Продлите их, чтобы избежать перерыва в показах. Стоимость продления:\r\n\r\n" +
+						$"{secondStroke}\r\n\r\n" +
+						$"Тарифы на 180 или 360 дней помогут сэкономить до 25% затрат. Отметим, что чем дольше клиенты видят вас, тем надёжнее будет поток заявок";
+				}
+			}
+			return result;
+		}
+
 		private async Task CheckUpsalesAsync()
 		{
 			var selected = Items.Where(i => i.IsSelected).ToList();
@@ -331,39 +624,140 @@ namespace SupporTik.ViewModels
 				return;
 			}
 
+			IsSearching = true;
+
 			try
 			{
-				var (cookieHeader, csrfToken) = await _ensureDataLensAuth();
-
-				if (string.IsNullOrEmpty(csrfToken))
-				{
-					_notificationService.ShowBalloon("Ошибка", "Не удалось получить CSRF-токен DataLens — проверьте авторизацию.", isWarning: true);
-					return;
-				}
-
-				var campaignIds = selected
-					.Select(i => i.RawPermalink)
-					.Where(p => !string.IsNullOrEmpty(p))
-					.ToList();
-
 				var progress = new Progress<string>(text => UpsaleButtonLabel = text);
-				Dictionary<string, string> results = await _upsaleService.CheckUpsalesAsync(cookieHeader, csrfToken, campaignIds, progress);
-
-				foreach (var item in selected)
-				{
-					if (!string.IsNullOrEmpty(item.RawPermalink) && results.TryGetValue(item.RawPermalink, out string value))
-					{
-						item.SetUpsale(value);
-					}
-				}
+				await CheckUpsalesForItemsAsync(selected, progress);
 			}
 			catch (Exception ex)
 			{
+				_forceRefreshDataLensAuth = true;
 				_notificationService.ShowBalloon("Ошибка", ex.Message, isWarning: true);
 			}
 			finally
 			{
 				UpsaleButtonLabel = "Проверить апсейлы";
+				IsSearching = false;
+			}
+		}
+
+		/// <summary>
+		/// Общая логика проверки апсейлов (DataLens + calculate-web-renewal-budget) — вызывается
+		/// и вручную по кнопке (CheckUpsalesCommand, на выбранных карточках), и автоматически
+		/// сразу после поиска (см. LazyUpsaleCheck в SearchAsync, на всех найденных).
+		/// </summary>
+		private async Task CheckUpsalesForItemsAsync(List<MarketingItemViewModel> items, IProgress<string> progress)
+		{
+			var (cookieHeader, csrfToken) = await _ensureDataLensAuth(_forceRefreshDataLensAuth);
+
+			if (string.IsNullOrEmpty(csrfToken))
+			{
+				// Кэшированный (или свежий) токен оказался пустым — в следующий раз просим
+				// View обновить его заново, а не повторно отдавать тот же самый кэш
+				_forceRefreshDataLensAuth = true;
+				_notificationService.ShowBalloon("Ошибка", "Не удалось получить CSRF-токен DataLens — проверьте авторизацию.", isWarning: true);
+				return;
+			}
+
+			_forceRefreshDataLensAuth = false;
+
+			var campaignIds = items
+				.Select(i => i.RawPermalink)
+				.Where(p => !string.IsNullOrEmpty(p))
+				.ToList();
+
+			Dictionary<string, string> results = await _upsaleService.CheckUpsalesAsync(cookieHeader, csrfToken, campaignIds, progress);
+
+			foreach (var item in items)
+			{
+				if (!string.IsNullOrEmpty(item.RawPermalink) && results.TryGetValue(item.RawPermalink, out string value))
+				{
+					item.SetUpsale(value);
+				}
+			}
+
+			// DataLens отдаёт "Продление N дней" только как намёк на срок, не сумму —
+			// для таких карточек сразу же считаем точную сумму через calculate-budget
+			await ResolveRenewalAmountsAsync(items, progress);
+
+			// Категории апсейла у части карточек только что изменились (Не проверено ->
+			// Есть/Нет апсейла) — обновляем список вариантов в фильтре и сам вид. Раньше
+			// Refresh тут специально не делали (ApplyFilterAsync пересоздавал все карточки
+			// и сбрасывал IsSelected) — теперь Refresh не трогает карточки и выделение,
+			// поэтому можно спокойно обновить сразу
+			RebuildUpsaleFilters();
+			RefreshItemsView();
+		}
+
+		/// <summary>
+		/// Для карточек с "Продление N дней" в UpsaleValue считает точную сумму продления
+		/// через billing/calculate-web-renewal-budget (см. BudgetService — csrfToken/sessionId
+		/// конкретной кампании достаются обычным HTTP GET её страницы, без WebView2/JS).
+		/// Раньше это делалось строго по очереди (единственный экземпляр WebView2) — теперь
+		/// это обычные HTTP-запросы, поэтому идёт с ограниченной параллельностью
+		/// (MaxConcurrentRenewalChecks), как и проверка апсейлов в UpsaleService. Если для
+		/// конкретной кампании не получилось — просто пропускает её, не прерывая проверку
+		/// остальных.
+		/// </summary>
+		private async Task ResolveRenewalAmountsAsync(List<MarketingItemViewModel> items, IProgress<string> progress)
+		{
+			var renewalItems = items
+				.Where(i => !string.IsNullOrEmpty(i.UpsaleValue) && i.UpsaleValue.Contains("Продление"))
+				.ToList();
+
+			if (renewalItems.Count == 0)
+			{
+				return;
+			}
+
+			// cookieHeader общий для всех кампаний (сессия yandex.ru) — тот же самый, что
+			// уже используется для списка кампаний, кэшируется во View между вызовами
+			YandexBusinessAuth auth = await _getYandexBusinessAuth(false);
+
+			if (string.IsNullOrEmpty(auth.CookieHeader))
+			{
+				return; // не авторизованы — пропускаем расчёт бюджета, апсейлы уже проверены
+			}
+
+			int completed = 0;
+
+			using (var throttle = new SemaphoreSlim(MaxConcurrentRenewalChecks))
+			{
+				var tasks = renewalItems.Select(async item =>
+				{
+					await throttle.WaitAsync();
+					try
+					{
+						var match = RenewalDaysRegex.Match(item.UpsaleValue);
+						if (!match.Success || !int.TryParse(match.Value, out int durationDays))
+						{
+							return;
+						}
+
+						var result = await _budgetService.CalculateRenewalAmountAsync(item.CompanyPermalink, item.RawPermalink, auth.CookieHeader, durationDays);
+
+						if (result != null)
+						{
+							item.SetAmountUpsale(result[0]);
+							item.SetPrediction(result[1]);
+						}
+					}
+					catch (Exception)
+					{
+						// Не удалось посчитать бюджет для конкретной кампании — оставляем как
+						// есть ("Продление N дней") и переходим к следующей
+					}
+					finally
+					{
+						int done = Interlocked.Increment(ref completed);
+						progress?.Report($"Проверка продления {done}/{renewalItems.Count}...");
+						throttle.Release();
+					}
+				});
+
+				await Task.WhenAll(tasks);
 			}
 		}
 	}

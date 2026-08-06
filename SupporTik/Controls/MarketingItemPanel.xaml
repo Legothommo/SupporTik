@@ -14,7 +14,7 @@
         <conv:StatusToTextForegroundConverter x:Key="StatusToTextForeground"/>
     </UserControl.Resources>
 
-    <ui:Card x:Name="Card" Margin="0,0,0,8">
+    <ui:Card x:Name="Card">
         <StackPanel>
 
             <!-- Заголовок: выбор + пермалинк + копирование + статус -->
@@ -31,7 +31,8 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                            FontWeight="SemiBold"
                            FontSize="13"
-                           TextWrapping="Wrap"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center"
                            Margin="0,0,4,0"/>
 
@@ -75,7 +76,8 @@
                                Text="{Binding DisplayRemain}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                FontSize="12"
-                               TextWrapping="Wrap"/>
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
 
                 <StackPanel x:Name="sp_role"
@@ -91,7 +93,8 @@
                                Text="{Binding Role}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                FontSize="12"
-                               TextWrapping="Wrap"/>
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
 
                 <StackPanel x:Name="sp_upsale"
@@ -107,23 +110,34 @@
                                Text="{Binding UpsaleValue}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                FontSize="12"
-                               TextWrapping="Wrap"/>
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
             </Grid>
             <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right">
+            HorizontalAlignment="Right">
+
                 <CheckBox x:Name="ChkSelect"
                           IsChecked="{Binding IsSelected, Mode=TwoWay}"
                           VerticalAlignment="Center"/>
 
+                <ui:Button Content="Копировать"
+                           Icon="{ui:SymbolIcon ClipboardPaste24}"
+                           Command="{Binding CopyUpsaleCommand}"
+                           Visibility="{Binding CanCopyUpsale, Converter={StaticResource BoolToVis}}"
+                           Appearance="Secondary"
+                           Margin="8,0,0,0"
+                           FontSize="12"
+                           Padding="10,4"/>
+
                 <ui:Button x:Name="BtnOpen"
-                       Content="Открыть"
-                       Icon="{ui:SymbolIcon Open24}"
-                       Command="{Binding OpenCommand}"
-                       Appearance="Secondary"
-                       HorizontalAlignment="Right"
-                       FontSize="12"
-                       Padding="10,4"/>
+                           Content="Открыть"
+                           Icon="{ui:SymbolIcon Open24}"
+                           Command="{Binding OpenCommand}"
+                           Appearance="Secondary"
+                           Margin="8,0,0,0"
+                           FontSize="12"
+                           Padding="10,4"/>
             </StackPanel>
         </StackPanel>
     </ui:Card>

@@ -42,6 +42,8 @@
             <RowDefinition Height="Auto"/>
             <!-- Поиск -->
             <RowDefinition Height="Auto"/>
+            <!-- Ленивая проверка апсейлов -->
+            <RowDefinition Height="Auto"/>
             <!-- Фильтр по статусу -->
             <RowDefinition Height="Auto"/>
             <!-- Действия с выбранными -->
@@ -77,7 +79,8 @@
                    Text="Проверка авторизации..."
                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                    FontSize="12"
-                   TextWrapping="Wrap"
+                   TextWrapping="NoWrap"
+                   TextTrimming="CharacterEllipsis"
                    Margin="0,0,0,10"
                    Visibility="Collapsed"/>
 
@@ -93,6 +96,7 @@
                     Grid.Row="3"
                     Orientation="Horizontal"
                     Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+                    IsEnabled="{Binding IsNotSearching}"
                     Margin="0,0,0,10">
             <ui:TextBox x:Name="UidTextBox"
                         Width="140"
@@ -117,50 +121,145 @@
                           Visibility="{Binding NothingToSearch, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
 
-        <!-- 5. Фильтр по статусу — кнопка со сводкой + выпадающая панель галок (можно
-             выбрать сразу несколько статусов) -->
-        <Grid x:Name="sp_filter"
-              Grid.Row="4"
-              Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
-              Margin="0,0,0,10">
-            <ui:Button x:Name="BtnStatusFilter"
-                       Content="{Binding StatusFilterSummary}"
-                       Icon="{ui:SymbolIcon Filter24}"
-                       Appearance="Secondary"
-                       HorizontalAlignment="Stretch"
-                       HorizontalContentAlignment="Left"
-                       Click="BtnStatusFilter_Click"/>
+        <CheckBox x:Name="ChkLazyUpsaleCheck"
+                  Grid.Row="4"
+                  Content="Сразу проверять апсейлы"
+                  IsChecked="{Binding LazyUpsaleCheck, Mode=TwoWay}"
+                  IsEnabled="{Binding IsNotSearching}"
+                  Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+                  Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                  FontSize="12"
+                  Margin="0,0,0,10"/>
 
-            <Popup x:Name="StatusFilterPopup"
-                   PlacementTarget="{Binding ElementName=BtnStatusFilter}"
-                   Placement="Bottom"
-                   StaysOpen="False"
-                   AllowsTransparency="True">
-                <Border Background="{DynamicResource ApplicationBackgroundBrush}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Padding="10"
-                        Width="220">
-                    <ItemsControl ItemsSource="{Binding StatusFilters}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <CheckBox Content="{Binding Status}"
-                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                          FontSize="12"
-                                          Margin="0,4"/>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </Border>
-            </Popup>
+        <!-- 5. Фильтры (статус / роль / апсейл) — кнопка со сводкой + выпадающая панель
+             галок у каждой (можно выбрать сразу несколько значений в каждом фильтре) -->
+        <Grid x:Name="sp_filter"
+              Grid.Row="5"
+              Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+              IsEnabled="{Binding IsNotSearching}"
+              Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Статус -->
+            <Grid Grid.Column="0">
+                <ui:Button x:Name="BtnStatusFilter"
+                           Content="{Binding StatusFilterSummary}"
+                           Icon="{ui:SymbolIcon Filter24}"
+                           Appearance="Secondary"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Left"
+                           Click="BtnStatusFilter_Click"/>
+
+                <Popup x:Name="StatusFilterPopup"
+                       PlacementTarget="{Binding ElementName=BtnStatusFilter}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10"
+                            Width="220">
+                        <ItemsControl ItemsSource="{Binding StatusFilters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Value}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                              FontSize="12"
+                                              Margin="0,4"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </Popup>
+            </Grid>
+
+            <!-- Роль -->
+            <Grid Grid.Column="2">
+                <ui:Button x:Name="BtnRoleFilter"
+                           Content="{Binding RoleFilterSummary}"
+                           Icon="{ui:SymbolIcon Filter24}"
+                           Appearance="Secondary"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Left"
+                           Click="BtnRoleFilter_Click"/>
+
+                <Popup x:Name="RoleFilterPopup"
+                       PlacementTarget="{Binding ElementName=BtnRoleFilter}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10"
+                            Width="220">
+                        <ItemsControl ItemsSource="{Binding RoleFilters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Value}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                              FontSize="12"
+                                              Margin="0,4"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </Popup>
+            </Grid>
+
+            <!-- Апсейл -->
+            <Grid Grid.Column="4">
+                <ui:Button x:Name="BtnUpsaleFilter"
+                           Content="{Binding UpsaleFilterSummary}"
+                           Icon="{ui:SymbolIcon Filter24}"
+                           Appearance="Secondary"
+                           HorizontalAlignment="Stretch"
+                           HorizontalContentAlignment="Left"
+                           Click="BtnUpsaleFilter_Click"/>
+
+                <Popup x:Name="UpsaleFilterPopup"
+                       PlacementTarget="{Binding ElementName=BtnUpsaleFilter}"
+                       Placement="Bottom"
+                       StaysOpen="False"
+                       AllowsTransparency="True">
+                    <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10"
+                            Width="220">
+                        <ItemsControl ItemsSource="{Binding UpsaleFilters}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Value}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                              FontSize="12"
+                                              Margin="0,4"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </Popup>
+            </Grid>
         </Grid>
 
         <!-- 6. Действия с выбранными карточками -->
         <StackPanel x:Name="sp_actions"
-                    Grid.Row="5"
+                    Grid.Row="6"
                     Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+                    IsEnabled="{Binding IsNotSearching}"
                     Margin="0,0,0,10">
             <ui:Button x:Name="BtnCopySelected"
                        Content="Скопировать пермалинки"
@@ -174,11 +273,19 @@
                        Icon="{ui:SymbolIcon ArrowTrendingLines24}"
                        Appearance="Secondary"
                        HorizontalAlignment="Stretch"
+                       Margin="0,0,0,8"
                        Command="{Binding CheckUpsalesCommand}"/>
+            <ui:Button x:Name="BtnCopySelectedUpsales"
+                       Content="Скопировать тексты апсейлов"
+                       Icon="{ui:SymbolIcon Copy24}"
+                       Appearance="Secondary"
+                       HorizontalAlignment="Stretch"
+                       Command="{Binding CopySelectedUpsalesCommand}"/>
         </StackPanel>
 
         <!-- 7. Результаты парсинга — карточки вместо таблицы, так читаемее -->
-        <Grid Grid.Row="6">
+        <Grid Grid.Row="7"
+              IsEnabled="{Binding IsNotSearching}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -208,9 +315,36 @@
                           VerticalAlignment="Center"/>
             </Grid>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="sp_results" ItemsSource="{Binding Items}"/>
-            </ScrollViewer>
+            <ListBox x:Name="sp_results"
+                     Grid.Row="1"
+                     ItemsSource="{Binding ItemsView}"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.CanContentScroll="True"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel">
+
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0,0,0,8"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Focusable" Value="False"/>
+
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
         </Grid>
     </Grid>
 </Window>

@@ -2,6 +2,7 @@ using SupporTik.Classes;
 using SupporTik.Mvvm;
 using SupporTik.Services;
 using System;
+using System.Windows;
 using System.Windows.Input;
 
 namespace SupporTik.ViewModels.Binds
@@ -34,6 +35,24 @@ namespace SupporTik.ViewModels.Binds
 		}
 
 		public string KeysDisplay => KeyExtensions.ToFriendlyShortcut(_bind.Modifiers, _bind.Key);
+
+		private const string KeysCapturePlaceholder = "Нажмите сочетание клавиш...";
+
+		private bool _isEditingKeys;
+		public bool IsEditingKeys
+		{
+			get => _isEditingKeys;
+			private set
+			{
+				if (SetProperty(ref _isEditingKeys, value))
+				{
+					OnPropertyChanged(nameof(KeysDisplayText));
+				}
+			}
+		}
+
+		/// <summary>То, что реально показывается в плашке сочетания — во время записи заменяется на подсказку.</summary>
+		public string KeysDisplayText => IsEditingKeys ? KeysCapturePlaceholder : KeysDisplay;
 
 		private bool _isEditingName;
 		public bool IsEditingName
@@ -71,6 +90,9 @@ namespace SupporTik.ViewModels.Binds
 		public ICommand SaveTextCommand { get; }
 		public ICommand CancelEditTextCommand { get; }
 
+		public ICommand StartEditKeysCommand { get; }
+		public ICommand CancelEditKeysCommand { get; }
+
 		public ICommand DeleteCommand { get; }
 
 		public BindItemViewModel(BindKeys bind, IBindsService bindsService)
@@ -87,6 +109,9 @@ namespace SupporTik.ViewModels.Binds
 			StartEditTextCommand = new RelayCommand(StartEditText);
 			SaveTextCommand = new RelayCommand(SaveText);
 			CancelEditTextCommand = new RelayCommand(() => IsEditingText = false);
+
+			StartEditKeysCommand = new RelayCommand(StartEditKeys);
+			CancelEditKeysCommand = new RelayCommand(CancelEditKeys);
 
 			DeleteCommand = new RelayCommand(Delete);
 		}
@@ -150,6 +175,43 @@ namespace SupporTik.ViewModels.Binds
 			}
 
 			IsEditingText = false;
+		}
+
+		private void StartEditKeys()
+		{
+			IsEditingKeys = true;
+			_bindsService.StartHotkeyCapture(OnKeysCaptured);
+		}
+
+		private void CancelEditKeys()
+		{
+			if (!IsEditingKeys)
+			{
+				return;
+			}
+
+			_bindsService.CancelHotkeyCapture();
+			IsEditingKeys = false;
+		}
+
+		/// <summary>
+		/// Коллбэк хука клавиатуры (см. HotkeyService.HookCallback) — вызывается СИНХРОННО
+		/// изнутри низкоуровневого хука, поэтому тяжёлую часть (диск, перерегистрация всех
+		/// хоткеев, пересборка списка карточек через RequestReload) откладываем через
+		/// Dispatcher, а не делаем прямо тут — иначе можно надолго заблокировать хук, и
+		/// Windows принудительно снимет его по таймауту.
+		/// </summary>
+		private void OnKeysCaptured(Key key, ModifierKeys modifiers)
+		{
+			Application.Current.Dispatcher.InvokeAsync(() =>
+			{
+				_bind.Key = key;
+				_bind.Modifiers = modifiers;
+				_bindsService.SaveAndReRegister();
+
+				IsEditingKeys = false;
+				RequestReload?.Invoke(this, EventArgs.Empty);
+			});
 		}
 
 		private void Delete()
