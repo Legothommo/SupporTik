@@ -262,11 +262,23 @@ namespace SupporTik.Services
 		}
 		public async Task ClearAuthorizationAsync()
 		{
-			// Если MarketingWindow ещё ни разу не открывали,
-			// создаём его, чтобы получить доступ к тому же WebView2-профилю.
 			if (_marketingWindow == null)
 			{
 				_marketingWindow = new MarketingWindow();
+			}
+
+			// Если окно ещё ни разу не было загружено,
+			// WebView2 тоже ещё не может нормально инициализироваться.
+			if (!_marketingWindow.IsLoaded)
+			{
+				_marketingWindow.Show();
+
+				// Даём WPF создать HWND и загрузить WebView2.
+				await _marketingWindow.Dispatcher.InvokeAsync(
+					() => { },
+					System.Windows.Threading.DispatcherPriority.Loaded);
+
+				_marketingWindow.Hide();
 			}
 
 			await _marketingWindow.ClearAuthorizationAsync();

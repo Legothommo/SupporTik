@@ -110,17 +110,6 @@ namespace SupporTik.ViewModels
 
 		private void ResetToDefaults()
 		{
-			MessageBoxResult result = MessageBox.Show(
-				"Все настройки (хоткеи, автозапуск, тема, история UID в меню рекламы и т.п.) вернутся к значениям по умолчанию. Бинды это не затронет. Продолжить?",
-				"Сбросить настройки",
-				MessageBoxButton.YesNo,
-				MessageBoxImage.Warning);
-
-			if (result != MessageBoxResult.Yes)
-			{
-				return;
-			}
-
 			_settings.ResetToDefaults();
 			// Настройки в реестре/на диске изменились "снаружи" от обычных сеттеров —
 			// перечитываем всё то же, что и после импорта
@@ -129,33 +118,23 @@ namespace SupporTik.ViewModels
 
 		private async Task ClearAuthorizationAsync()
 		{
-			MessageBoxResult result = MessageBox.Show(
-				"Будет удалена авторизация Яндекс Бизнеса и DataLens.\n\n" +
-				"При следующем поиске потребуется войти в аккаунты заново.\n\n" +
-				"Продолжить?",
-				"Удалить авторизацию",
-				MessageBoxButton.YesNo,
-				MessageBoxImage.Warning);
-
-			if (result != MessageBoxResult.Yes)
-				return;
+			var notifyIcon = CompositionRoot.Current?.NotifyIcon;
 
 			try
 			{
 				await _settings.ClearAuthorizationAsync();
 
-				CompositionRoot.Current?.NotifyIcon?.ShowBalloonTip(
+				notifyIcon.ShowBalloonTip(
 					"Авторизация удалена",
 					"Сессии Яндекс Бизнеса и DataLens удалены.",
 					BalloonIcon.Info);
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show(
-					$"Не удалось удалить авторизацию:\n{ex.Message}",
+				notifyIcon.ShowBalloonTip(
 					"Ошибка",
-					MessageBoxButton.OK,
-					MessageBoxImage.Error);
+					ex.ToString(),
+					BalloonIcon.Error);
 			}
 		}
 
