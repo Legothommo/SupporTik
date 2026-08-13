@@ -74,15 +74,24 @@
         </Grid>
 
         <!-- 2. Статус авторизации -->
-        <TextBlock x:Name="TbLoginStatus"
-                   Grid.Row="1"
-                   Text="Проверка авторизации..."
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                   FontSize="12"
-                   TextWrapping="NoWrap"
-                   TextTrimming="CharacterEllipsis"
-                   Margin="0,0,0,10"
-                   Visibility="Collapsed"/>
+        <StackPanel Grid.Row="1" Margin="0,0,0,10">
+            <TextBlock x:Name="TbLoginStatus"
+                       Text="Проверка авторизации..."
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       FontSize="12"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"
+                       Visibility="Collapsed"/>
+
+            <!-- Когда сессия Yandex Business последний раз подтверждалась — чтобы не гадать,
+                 не протухла ли она, если поиск вдруг перестал находить кампании -->
+            <TextBlock x:Name="TbSessionStatus"
+                       Text="{Binding SessionStatusText}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       FontSize="11"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
 
         <!-- 3. Окно входа — видно только пока пользователь ещё не авторизован -->
         <wv2:WebView2 x:Name="webView"
@@ -103,6 +112,37 @@
                         PlaceholderText="UID пользователя"
                         Text="{Binding Uid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                         Margin="0,0,8,0"/>
+            <ui:Button x:Name="BtnRecentUids"
+                       Icon="{ui:SymbolIcon History24}"
+                       Appearance="Secondary"
+                       ToolTip="Недавние UID"
+                       Margin="0,0,8,0"
+                       Click="BtnRecentUids_Click"/>
+
+            <Popup x:Name="RecentUidsPopup"
+                   PlacementTarget="{Binding ElementName=BtnRecentUids}"
+                   Placement="Bottom"
+                   StaysOpen="False"
+                   AllowsTransparency="True">
+                <Border Background="{DynamicResource ApplicationBackgroundBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="6"
+                        Width="160">
+                    <ItemsControl x:Name="RecentUidsList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <ui:Button Content="{Binding}"
+                                           Appearance="Transparent"
+                                           HorizontalAlignment="Stretch"
+                                           HorizontalContentAlignment="Left"
+                                           Click="RecentUidItem_Click"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </Popup>
             <ui:Button x:Name="SearchButton"
                        Content="{Binding SearchButtonLabel}"
                        Icon="{ui:SymbolIcon Search24}"

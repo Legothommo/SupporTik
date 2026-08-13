@@ -60,16 +60,17 @@ namespace SupporTik
 			double left = cursorPos.X + offsetX;
 			double top = cursorPos.Y + offsetY;
 
-			// Защита от вылета за границы экрана (WorkArea)
-			double screenWidth = SystemParameters.WorkArea.Width;
-			double screenHeight = SystemParameters.WorkArea.Height;
+			// Защита от вылета за границы экрана — рабочая область именно того монитора,
+			// где сейчас курсор (на многомониторных системах SystemParameters.WorkArea
+			// всегда вернула бы только основной монитор)
+			Rect workArea = MonitorHelper.GetMonitorBoundsForPoint(cursorPos).WorkArea;
 
-			if (left + this.ActualWidth > screenWidth)
+			if (left + this.ActualWidth > workArea.Right)
 			{
 				left = cursorPos.X - this.ActualWidth - offsetX; // Переносим влево от курсора
 			}
 
-			if (top + this.ActualHeight > screenHeight)
+			if (top + this.ActualHeight > workArea.Bottom)
 			{
 				top = cursorPos.Y - this.ActualHeight - offsetY; // Переносим вверх от курсора
 			}

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows.Input;
 
 namespace SupporTik.Services
@@ -31,5 +32,10 @@ namespace SupporTik.Services
 
 		void ExportData();
 		void ImportData();
+
+		Task ClearAuthorizationAsync();
+
+		/// <summary>Возвращает все настройки (включая хоткеи, тему, историю UID) к значениям по умолчанию. Бинды (keybinds.json) не трогает.</summary>
+		void ResetToDefaults();
 	}
 }

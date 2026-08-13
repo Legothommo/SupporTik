@@ -1,7 +1,11 @@
-using System.Windows.Input;
+using Hardcodet.Wpf.TaskbarNotification;
 using SupporTik.Classes;
 using SupporTik.Mvvm;
 using SupporTik.Services;
+using System;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
 using Key = System.Windows.Input.Key;
 using ModifierKeys = System.Windows.Input.ModifierKeys;
 
@@ -10,8 +14,11 @@ namespace SupporTik.ViewModels
 	public class SettingsPageViewModel : ViewModelBase
 	{
 		private const string NoHotkeyText = "Нажмите для назначения...";
+		private const string CheckUpdatesDefaultLabel = "Проверить обновления";
+		private const string CheckUpdatesRunningLabel = "Проверяем...";
 
 		private readonly IAppSettingsService _settings;
+		private readonly UpdateCheckService _updateCheckService;
 
 		private Key _ndaKey;
 		private ModifierKeys _ndaModifiers;
@@ -67,13 +74,24 @@ namespace SupporTik.ViewModels
 			set => SetProperty(ref _marketingHotkeyDisplay, value);
 		}
 
+		private string _checkUpdatesLabel = CheckUpdatesDefaultLabel;
+		public string CheckUpdatesLabel
+		{
+			get => _checkUpdatesLabel;
+			set => SetProperty(ref _checkUpdatesLabel, value);
+		}
+
 		public ICommand SaveCommand { get; }
 		public ICommand ExportCommand { get; }
 		public ICommand ImportCommand { get; }
+		public ICommand CheckUpdatesCommand { get; }
+		public ICommand ResetCommand { get; }
+		public ICommand ClearAuthorizationCommand { get; }
 
 		public SettingsPageViewModel(IAppSettingsService settings)
 		{
 			_settings = settings;
+			_updateCheckService = new UpdateCheckService();
 
 			SaveCommand = new RelayCommand(Save);
 			ExportCommand = new RelayCommand(() => _settings.ExportData());
@@ -83,8 +101,97 @@ namespace SupporTik.ViewModels
 				// Импорт мог изменить настройки/хоткеи — обновляем то, что показано на экране
 				LoadAll();
 			});
+			CheckUpdatesCommand = new AsyncRelayCommand(CheckForUpdatesAsync);
+			ClearAuthorizationCommand = new AsyncRelayCommand(ClearAuthorizationAsync);
+			ResetCommand = new RelayCommand(ResetToDefaults);
 
 			LoadAll();
+		}
+
+		private void ResetToDefaults()
+		{
+			MessageBoxResult result = MessageBox.Show(
+				"Все настройки (хоткеи, автозапуск, тема, история UID в меню рекламы и т.п.) вернутся к значениям по умолчанию. Бинды это не затронет. Продолжить?",
+				"Сбросить настройки",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning);
+
+			if (result != MessageBoxResult.Yes)
+			{
+				return;
+			}
+
+			_settings.ResetToDefaults();
+			// Настройки в реестре/на диске изменились "снаружи" от обычных сеттеров —
+			// перечитываем всё то же, что и после импорта
+			LoadAll();
+		}
+
+		private async Task ClearAuthorizationAsync()
+		{
+			MessageBoxResult result = MessageBox.Show(
+				"Будет удалена авторизация Яндекс Бизнеса и DataLens.\n\n" +
+				"При следующем поиске потребуется войти в аккаунты заново.\n\n" +
+				"Продолжить?",
+				"Удалить авторизацию",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Warning);
+
+			if (result != MessageBoxResult.Yes)
+				return;
+
+			try
+			{
+				await _settings.ClearAuthorizationAsync();
+
+				CompositionRoot.Current?.NotifyIcon?.ShowBalloonTip(
+					"Авторизация удалена",
+					"Сессии Яндекс Бизнеса и DataLens удалены.",
+					BalloonIcon.Info);
+			}
+			catch (Exception ex)
+			{
+				MessageBox.Show(
+					$"Не удалось удалить авторизацию:\n{ex.Message}",
+					"Ошибка",
+					MessageBoxButton.OK,
+					MessageBoxImage.Error);
+			}
+		}
+
+		/// <summary>
+		/// Тот же UpdateCheckService, что и автопроверка на старте (см. App.OnStartup) —
+		/// только по явному клику, а не молча. Баллун обновления показывается тем же
+		/// App.ShowUpdateBalloon, чтобы клик по нему одинаково открывал ссылку в обоих
+		/// случаях (см. App.NotifyIcon_TrayBalloonTipClicked).
+		/// </summary>
+		private async Task CheckForUpdatesAsync()
+		{
+			CheckUpdatesLabel = CheckUpdatesRunningLabel;
+
+			try
+			{
+				UpdateInfo update = await _updateCheckService.CheckAsync();
+				TaskbarIcon notifyIcon = CompositionRoot.Current?.NotifyIcon;
+
+				if (notifyIcon == null)
+				{
+					return;
+				}
+
+				if (update != null)
+				{
+					App.ShowUpdateBalloon(notifyIcon, update);
+				}
+				else
+				{
+					notifyIcon.ShowBalloonTip("Обновлений нет", "У вас установлена последняя версия SupporTik.", BalloonIcon.Info);
+				}
+			}
+			finally
+			{
+				CheckUpdatesLabel = CheckUpdatesDefaultLabel;
+			}
 		}
 
 		private void LoadAll()

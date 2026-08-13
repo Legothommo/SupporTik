@@ -29,32 +29,73 @@ namespace SupporTik.Services
 				}
 
 				string filePath = Path.Combine(_folderPath, fileName);
+				string tempPath = filePath + ".tmp";
+				string backupPath = filePath + ".bak";
+
 				string jsonString = JsonConvert.SerializeObject(data, Formatting.Indented);
-				File.WriteAllText(filePath, jsonString);
+				File.WriteAllText(tempPath, jsonString);
+
+				if (File.Exists(filePath))
+				{
+					// Атомарная замена: подменяет файл и одновременно сохраняет предыдущую
+					// версию в backupPath — если запись оборвётся на середине (сбой питания,
+					// принудительное завершение процесса), либо останется старый файл, либо
+					// появится валидный новый, промежуточного повреждённого состояния не будет
+					File.Replace(tempPath, filePath, backupPath);
+				}
+				else
+				{
+					File.Move(tempPath, filePath);
+				}
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"Ошибка при сохранении данных: {ex.Message}");
+				LoggingService.LogError($"StorageService.SaveData({fileName})", ex);
 			}
 		}
 
 		public List<T> LoadData<T>(string fileName = DefaultFileName)
 		{
+			string filePath = Path.Combine(_folderPath, fileName);
+
+			List<T> data = TryLoad<T>(filePath, out Exception primaryError);
+			if (data != null)
+			{
+				return data;
+			}
+
+			// Основной файл повреждён или отсутствует — пробуем откатиться на бэкап
+			// от предыдущего успешного сохранения (см. SaveData)
+			string backupPath = filePath + ".bak";
+			data = TryLoad<T>(backupPath, out _);
+
+			if (data != null)
+			{
+				LoggingService.LogError($"StorageService.LoadData({fileName}): восстановлено из {backupPath}", primaryError);
+				return data;
+			}
+
+			return new List<T>();
+		}
+
+		private List<T> TryLoad<T>(string filePath, out Exception error)
+		{
+			error = null;
+
 			try
 			{
-				string filePath = Path.Combine(_folderPath, fileName);
 				if (!File.Exists(filePath))
 				{
-					return new List<T>();
+					return null;
 				}
 
 				string jsonString = File.ReadAllText(filePath);
-				return JsonConvert.DeserializeObject<List<T>>(jsonString) ?? new List<T>();
+				return JsonConvert.DeserializeObject<List<T>>(jsonString);
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"Ошибка при загрузке данных: {ex.Message}");
-				return new List<T>();
+				error = ex;
+				return null;
 			}
 		}
 	}

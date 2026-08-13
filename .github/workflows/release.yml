@@ -1,0 +1,43 @@
+name: Release
+
+# Срабатывает при пуше тега вида "2.5.0" (без префикса "v" — так уже
+# называются существующие релизы в этом репозитории).
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+# По умолчанию GITHUB_TOKEN может быть read-only — без этого создание релиза
+# (action-gh-release) падало бы с 403.
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: msbuild SupporTik/SupporTik.csproj -t:Restore -v:minimal
+
+      - name: Build (Release)
+        run: msbuild SupporTik/SupporTik.csproj -t:Build -p:Configuration=Release -v:minimal
+
+      - name: Zip build output
+        shell: pwsh
+        run: Compress-Archive -Path "SupporTik/bin/Release/*" -DestinationPath "SupporTik_v${{ github.ref_name }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SupporTik_v${{ github.ref_name }}.zip
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

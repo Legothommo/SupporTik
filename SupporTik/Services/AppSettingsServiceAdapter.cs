@@ -1,7 +1,8 @@
-using System;
-using System.Windows.Input;
 using Hardcodet.Wpf.TaskbarNotification;
 using Microsoft.Win32;
+using System;
+using System.Threading.Tasks;
+using System.Windows.Input;
 
 namespace SupporTik.Services
 {
@@ -91,5 +92,36 @@ namespace SupporTik.Services
 
 		public void ExportData() => CompositionRoot.Current.Hotkeys.ExportData();
 		public void ImportData() => CompositionRoot.Current.Hotkeys.ImportData();
+
+		public Task ClearAuthorizationAsync()
+		{
+			return CompositionRoot.Current.Hotkeys.ClearAuthorizationAsync();
+		}
+
+		/// <summary>
+		/// Бинды (keybinds.json через StorageService) не трогает — это отдельные пользовательские
+		/// данные, а не настройки приложения; сбрасывается только то, что лежит в
+		/// Properties.Settings (хоткеи, автозапуск, тема, история UID меню рекламы и т.п.).
+		/// </summary>
+		public void ResetToDefaults()
+		{
+			Properties.Settings.Default.Reset();
+			Properties.Settings.Default.Save();
+
+			SetAutoStart(false);
+
+			// ThemeService.SetTheme сам приводит в порядок и подписку на системную тему
+			// (Reset() выше не проходит через её API, поэтому живая подписка на
+			// SystemEvents могла бы иначе остаться висеть), и синхронно перерисовывает
+			// окна под новое (дефолтное — тёмное) значение
+			new ThemeService().SetTheme(false);
+
+			CompositionRoot.Current.Hotkeys.RegisterDefaultHotkeys();
+
+			CompositionRoot.Current.NotifyIcon?.ShowBalloonTip(
+				"Настройки сброшены",
+				"Все настройки возвращены к значениям по умолчанию.",
+				BalloonIcon.None);
+		}
 	}
 }

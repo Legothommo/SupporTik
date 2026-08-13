@@ -118,5 +118,29 @@ namespace SupporTik.Properties {
                 this["IsLightTheme"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool FollowSystemTheme {
+            get {
+                return ((bool)(this["FollowSystemTheme"]));
+            }
+            set {
+                this["FollowSystemTheme"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string RecentMarketingUids {
+            get {
+                return ((string)(this["RecentMarketingUids"]));
+            }
+            set {
+                this["RecentMarketingUids"] = value;
+            }
+        }
     }
 }

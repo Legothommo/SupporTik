@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 
 namespace SupporTik.Services
@@ -30,6 +31,16 @@ namespace SupporTik.Services
 
 		private MarketingWindow _marketingWindow;
 
+		// Счётчик использования копится в памяти на каждую вставку (дёшево — инкремент
+		// инта), а на диск пишется не сразу, а раз в UsageFlushIntervalMs, если что-то
+		// накопилось. Само наращивание вызывается синхронно изнутри низкоуровневого хука
+		// клавиатуры (см. RegisterHotkey/BuildQuickMenuEntries ниже) — как и в
+		// BindItemViewModel.OnKeysCaptured, диск оттуда трогать нельзя (риск таймаута хука),
+		// поэтому запись идёт отдельным таймером на ThreadPool-потоке.
+		private const int UsageFlushIntervalMs = 30000;
+		private readonly System.Timers.Timer _usageFlushTimer;
+		private volatile bool _usageDirty;
+
 		public IReadOnlyList<BindKeys> BindKeys => _bindKeys;
 
 		public HotkeyRegistrationService(StorageService storage, IHotkeyService hotkeyService,
@@ -42,6 +53,27 @@ namespace SupporTik.Services
 			_notifyIcon = notifyIcon;
 
 			_groupInfos = _storage.LoadData<BindGroupInfo>("groups.json");
+
+			_usageFlushTimer = new System.Timers.Timer(UsageFlushIntervalMs) { AutoReset = true };
+			_usageFlushTimer.Elapsed += (s, e) => FlushUsageIfDirty();
+			_usageFlushTimer.Start();
+		}
+
+		private void RecordUsage(BindKeys bind)
+		{
+			bind.UsageCount++;
+			_usageDirty = true;
+		}
+
+		private void FlushUsageIfDirty()
+		{
+			if (!_usageDirty)
+			{
+				return;
+			}
+
+			_usageDirty = false;
+			_storage.SaveData(_bindKeys);
 		}
 
 		#region Бинды
@@ -149,7 +181,11 @@ namespace SupporTik.Services
 						bind.Name,
 						bind.Key,
 						bind.Modifiers,
-						() => _pasteService.PasteText(bind.Text));
+						() =>
+						{
+							RecordUsage(bind);
+							_pasteService.PasteText(bind.Text);
+						});
 				}
 				else
 				{
@@ -231,6 +267,17 @@ namespace SupporTik.Services
 				_marketingWindow.Activate();
 			}
 		}
+		public async Task ClearAuthorizationAsync()
+		{
+			// Если MarketingWindow ещё ни разу не открывали,
+			// создаём его, чтобы получить доступ к тому же WebView2-профилю.
+			if (_marketingWindow == null)
+			{
+				_marketingWindow = new MarketingWindow();
+			}
+
+			await _marketingWindow.ClearAuthorizationAsync();
+		}
 
 		/// <summary>
 		/// Хоткей, который может совпасть с обычным биндом. В этом случае прямая
@@ -279,7 +326,11 @@ namespace SupporTik.Services
 				.Select(bind => new QuickMenuEntry
 				{
 					Name = bind.Name,
-					Action = () => _pasteService.PasteText(bind.Text)
+					Action = () =>
+					{
+						RecordUsage(bind);
+						_pasteService.PasteText(bind.Text);
+					}
 				})
 				.ToList();
 
@@ -436,6 +487,9 @@ namespace SupporTik.Services
 
 		public void UnregisterAllOnExit()
 		{
+			_usageFlushTimer.Stop();
+			_usageFlushTimer.Dispose();
+
 			_hotkeyService.UnregisterAll();
 			(_hotkeyService as IDisposable)?.Dispose();
 		}

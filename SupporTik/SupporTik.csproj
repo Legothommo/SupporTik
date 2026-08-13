@@ -118,6 +118,9 @@
     <Compile Include="Services\IThemeService.cs" />
     <Compile Include="Services\ThemeService.cs" />
     <Compile Include="Services\NotificationServiceAdapter.cs" />
+    <Compile Include="Services\UpdateCheckService.cs" />
+    <Compile Include="Services\LoggingService.cs" />
+    <Compile Include="Services\MonitorHelper.cs" />
     <Compile Include="Services\HotkeyRegistrationService.cs" />
     <Compile Include="Services\MouseHelper.cs" />
     <Compile Include="ViewModels\Binds\BindItemViewModel.cs" />

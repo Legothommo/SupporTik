@@ -64,7 +64,7 @@
                                         Padding="7,3"
                                         Margin="10,0,0,0"
                                         VerticalAlignment="Center">
-                                    <TextBlock Text="v2.4.0"
+                                    <TextBlock Text="v2.5.0"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                FontSize="11"
                                                FontWeight="SemiBold"/>

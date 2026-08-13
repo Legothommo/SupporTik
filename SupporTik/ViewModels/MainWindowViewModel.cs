@@ -24,6 +24,36 @@ namespace SupporTik.ViewModels
 				if (SetProperty(ref _isLightTheme, value))
 				{
 					_themeService.SetTheme(value);
+
+					// Ручной выбор темы отключает слежение за системной (см. ThemeService.SetTheme) —
+					// отражаем это и в переключателе "Как в Windows"
+					if (_followSystemTheme)
+					{
+						_followSystemTheme = false;
+						OnPropertyChanged(nameof(FollowSystemTheme));
+					}
+				}
+			}
+		}
+
+		private bool _followSystemTheme;
+		public bool FollowSystemTheme
+		{
+			get => _followSystemTheme;
+			set
+			{
+				if (SetProperty(ref _followSystemTheme, value))
+				{
+					_themeService.SetFollowSystem(value);
+
+					// При включении сразу подтягиваем то, что реально применилось (текущую
+					// системную тему), чтобы переключатель "Светлая тема" не показывал старое
+					// значение до следующей смены темы в Windows
+					if (value)
+					{
+						_isLightTheme = _themeService.IsLightTheme;
+						OnPropertyChanged(nameof(IsLightTheme));
+					}
 				}
 			}
 		}
@@ -35,6 +65,7 @@ namespace SupporTik.ViewModels
 		{
 			_themeService = themeService;
 			_isLightTheme = themeService.IsLightTheme;
+			_followSystemTheme = themeService.IsFollowingSystem;
 
 			ToggleMenuCommand = new RelayCommand(() => IsMenuOpen = !IsMenuOpen);
 			CloseMenuCommand = new RelayCommand(() => IsMenuOpen = false);

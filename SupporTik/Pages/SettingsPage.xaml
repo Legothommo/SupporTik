@@ -199,7 +199,34 @@
                     </StackPanel>
                 </ui:Card>
 
-                <!-- 4. Секция: Импорт и Экспорт -->
+                <!-- 4. Секция: Обновления -->
+                <ui:Card Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="ОБНОВЛЕНИЯ"
+                                   Style="{StaticResource SectionHeaderStyle}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="Проверка обновлений"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           FontSize="14"/>
+                                <TextBlock Text="Автоматически проверяется при запуске, но можно и вручную"
+                                           Style="{StaticResource SettingDescriptionStyle}"/>
+                            </StackPanel>
+                            <ui:Button Grid.Column="1"
+                                       Content="{Binding CheckUpdatesLabel}"
+                                       Icon="{ui:SymbolIcon ArrowSync24}"
+                                       Appearance="Secondary"
+                                       VerticalAlignment="Center"
+                                       Command="{Binding CheckUpdatesCommand}"/>
+                        </Grid>
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- 5. Секция: Импорт и Экспорт -->
                 <ui:Card Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="ИМПОРТ И ЭКСПОРТ"
@@ -226,6 +253,42 @@
                                        Height="34"
                                        Command="{Binding ExportCommand}"/>
                         </Grid>
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- 6. Секция: Сброс авторизации -->
+                <ui:Card Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="АВТОРИЗАЦИЯ"
+                                   Style="{StaticResource SectionHeaderStyle}"/>
+
+                        <TextBlock Text="Удалить сохранённую сессию. При следующем открытии меню рекламы потребуется войти заново."
+                                   Style="{StaticResource SettingDescriptionStyle}"
+                                   Margin="0,0,0,8"/>
+
+                        <ui:Button Content="Выйти"
+                                   Icon="{ui:SymbolIcon SignOut24}"
+                                   Appearance="Danger"
+                                   HorizontalAlignment="Stretch"
+                                   Height="34"
+                                   Command="{Binding ClearAuthorizationCommand}"/>
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- 7. Секция: Сброс -->
+                <ui:Card Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="СБРОС"
+                                   Style="{StaticResource SectionHeaderStyle}"/>
+                        <TextBlock Text="Вернуть все настройки к значениям по умолчанию. Бинды не затрагиваются."
+                                   Style="{StaticResource SettingDescriptionStyle}"
+                                   Margin="0,0,0,8"/>
+                        <ui:Button Content="Сбросить настройки"
+                                   Icon="{ui:SymbolIcon ArrowReset24}"
+                                   Appearance="Danger"
+                                   HorizontalAlignment="Stretch"
+                                   Height="34"
+                                   Command="{Binding ResetCommand}"/>
                     </StackPanel>
                 </ui:Card>
 

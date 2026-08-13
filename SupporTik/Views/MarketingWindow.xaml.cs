@@ -39,6 +39,12 @@ namespace SupporTik.Views
 		// Сторона, с которой выезжает окно — настраивается в SettingsPage
 		private bool OpenFromLeft => Properties.Settings.Default.MarketingMenuFromLeft;
 
+		// Монитор, на котором окно показывается в текущем цикле показа — определяется
+		// по позиции курсора (см. RefreshActiveMonitor), а не всегда основной, чтобы на
+		// многомониторных системах окно выезжало там, где сейчас пользователь, а не
+		// потенциально за пределами того монитора, где реально сидит человек
+		private MonitorHelper.MonitorBounds _activeMonitor;
+
 		public MarketingWindow()
 		{
 			InitializeComponent();
@@ -47,10 +53,11 @@ namespace SupporTik.Views
 
 			// Занимаем нужный край экрана по всей высоте рабочей области, изначально
 			// за пределами экрана — оттуда стартует анимация выезда
-			var workArea = SystemParameters.WorkArea;
+			RefreshActiveMonitor();
+			Rect workArea = _activeMonitor.WorkArea;
 			Height = workArea.Height - 200;
 			Top = workArea.Top;
-			Left = OpenFromLeft ? workArea.Left - WindowWidth : workArea.Right;
+			Left = OpenFromLeft ? _activeMonitor.Bounds.Left - WindowWidth : _activeMonitor.Bounds.Right;
 
 			var campaignService = new MarketingCampaignService();
 			var notificationService = new NotificationServiceAdapter();
@@ -59,7 +66,55 @@ namespace SupporTik.Views
 			_viewModel = new MarketingWindowViewModel(campaignService, notificationService, upsaleService, budgetService, EnsureDataLensAuthAsync, GetYandexBusinessAuthAsync);
 			DataContext = _viewModel;
 
+			// Тикает, пока окно открыто, чтобы "N мин назад" само доезжало без нового
+			// похода за авторизацией — иначе текст замирал бы на значении с момента
+			// последнего успешного запроса до следующего клика "Поиск"
+			_sessionStatusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+			_sessionStatusTimer.Tick += (s, e) => RefreshSessionStatusText();
+			_sessionStatusTimer.Start();
+
 			Loaded += MarketingWindow_Loaded;
+		}
+
+		/// <summary>
+		/// "Устарела" — эвристика (StaleSessionThreshold), не факт: у нас нет способа узнать
+		/// реальный срок жизни куки/токена со стороны Яндекса, только предупредить, что
+		/// давно не перепроверялось, если поиск вдруг начнёт падать с ошибкой авторизации.
+		/// </summary>
+		private void RefreshSessionStatusText()
+		{
+			if (_yandexAuthCheckedAt == null)
+			{
+				_viewModel.SessionStatusText = string.Empty;
+				return;
+			}
+
+			TimeSpan age = DateTime.Now - _yandexAuthCheckedAt.Value;
+			bool stale = age > StaleSessionThreshold;
+
+			string text = $"Сессия Business подтверждена {FormatAge(age)}";
+
+			if (_dataLensAuthCheckedAt != null)
+			{
+				text += $" · DataLens {FormatAge(DateTime.Now - _dataLensAuthCheckedAt.Value)}";
+			}
+
+			_viewModel.SessionStatusText = stale ? $"⚠ {text} — возможно, устарела" : text;
+		}
+
+		private static string FormatAge(TimeSpan age)
+		{
+			if (age < TimeSpan.FromMinutes(1))
+			{
+				return "только что";
+			}
+
+			if (age < TimeSpan.FromHours(1))
+			{
+				return $"{(int)age.TotalMinutes} мин. назад";
+			}
+
+			return $"{(int)age.TotalHours} ч. назад";
 		}
 
 		private async void MarketingWindow_Loaded(object sender, RoutedEventArgs e)
@@ -82,33 +137,42 @@ namespace SupporTik.Views
 		/// </summary>
 		public async void ShowAnimated()
 		{
+			// Пересчитываем на каждый показ — за время, пока окно было скрыто,
+			// пользователь мог переключиться на другой монитор
+			RefreshActiveMonitor();
+
 			if (!IsLoaded)
 			{
 				Show();
 				return;
 			}
 
-			var workArea = SystemParameters.WorkArea;
-			Left = OpenFromLeft ? workArea.Left - WindowWidth : workArea.Right;
+			Left = OpenFromLeft ? _activeMonitor.Bounds.Left - WindowWidth : _activeMonitor.Bounds.Right;
 
 			Show();
 			await Dispatcher.Yield(DispatcherPriority.Loaded);
 			AnimateSlideIn();
 		}
 
+		private void RefreshActiveMonitor()
+		{
+			_activeMonitor = MonitorHelper.GetMonitorBoundsForPoint(MouseHelper.GetCursorPosition());
+		}
+
 		private void AnimateSlideIn()
 		{
-			var screenWidth = SystemParameters.PrimaryScreenWidth;
-			var screenHeight = SystemParameters.PrimaryScreenHeight;
+			Rect workArea = _activeMonitor.WorkArea;
+			Rect bounds = _activeMonitor.Bounds;
 
-			// Целевая позиция — окно "прилипает" к нужному краю, с отступом 20px
-			double targetLeft = OpenFromLeft ? 20 : screenWidth - Width - 20;
-			double targetTop = (screenHeight - Height) / 2; // по центру вертикально
+			// Целевая позиция — окно "прилипает" к нужному краю рабочей области монитора,
+			// с отступом 20px
+			double targetLeft = OpenFromLeft ? workArea.Left + 20 : workArea.Right - Width - 20;
+			double targetTop = workArea.Top + (workArea.Height - Height) / 2; // по центру вертикально
 
 			Top = targetTop;
 
-			// Стартовая позиция — полностью за пределами экрана, с соответствующей стороны
-			double startLeft = OpenFromLeft ? -Width : screenWidth;
+			// Стартовая позиция — полностью за пределами монитора, с соответствующей стороны
+			double startLeft = OpenFromLeft ? bounds.Left - Width : bounds.Right;
 			Left = startLeft;
 
 			var animation = new DoubleAnimation
@@ -178,6 +242,14 @@ namespace SupporTik.Views
 		private YandexBusinessAuth _cachedYandexAuth;
 		private (string CookieHeader, string CsrfToken)? _cachedDataLensAuth;
 
+		// Когда кэш выше последний раз подтверждался реальным успешным заходом — чисто
+		// информационно для пользователя (см. RefreshSessionStatusText): токен формально
+		// не имеет известного срока жизни на нашей стороне, порог "устарела" — эвристика.
+		private DateTime? _yandexAuthCheckedAt;
+		private DateTime? _dataLensAuthCheckedAt;
+		private static readonly TimeSpan StaleSessionThreshold = TimeSpan.FromMinutes(30);
+		private readonly DispatcherTimer _sessionStatusTimer;
+
 		private async Task InitializeAsync()
 		{
 			_viewModel.IsSearchUiVisible = true;
@@ -244,6 +316,8 @@ namespace SupporTik.Views
 			if (!string.IsNullOrEmpty(csrfToken))
 			{
 				_cachedDataLensAuth = result;
+				_dataLensAuthCheckedAt = DateTime.Now;
+				RefreshSessionStatusText();
 			}
 
 			return result;
@@ -329,6 +403,8 @@ namespace SupporTik.Views
 			if (!string.IsNullOrEmpty(csrfToken))
 			{
 				_cachedYandexAuth = auth;
+				_yandexAuthCheckedAt = DateTime.Now;
+				RefreshSessionStatusText();
 			}
 
 			return auth;
@@ -339,6 +415,22 @@ namespace SupporTik.Views
 		private void Close_Click(object sender, RoutedEventArgs e)
 		{
 			HideAnimated();
+		}
+
+		private void BtnRecentUids_Click(object sender, RoutedEventArgs e)
+		{
+			RecentUidsList.ItemsSource = _viewModel.RecentUids;
+			RecentUidsPopup.IsOpen = !RecentUidsPopup.IsOpen;
+		}
+
+		private void RecentUidItem_Click(object sender, RoutedEventArgs e)
+		{
+			if (sender is FrameworkElement element && element.DataContext is string uid)
+			{
+				_viewModel.Uid = uid;
+			}
+
+			RecentUidsPopup.IsOpen = false;
 		}
 
 		private void BtnStatusFilter_Click(object sender, RoutedEventArgs e)
@@ -364,7 +456,7 @@ namespace SupporTik.Views
 		/// </summary>
 		private void HideAnimated()
 		{
-			double target = OpenFromLeft ? -Width : SystemParameters.PrimaryScreenWidth;
+			double target = OpenFromLeft ? _activeMonitor.Bounds.Left - Width : _activeMonitor.Bounds.Right;
 			var animation = new DoubleAnimation
 			{
 				To = target,
@@ -379,6 +471,22 @@ namespace SupporTik.Views
 			};
 
 			BeginAnimation(Window.LeftProperty, animation);
+		}
+		public async Task ClearAuthorizationAsync()
+		{
+			await webView.EnsureCoreWebView2Async();
+
+			if (webView.CoreWebView2 == null)
+				return;
+
+			// Удаляем cookies и данные сайтов из профиля WebView2.
+			await webView.CoreWebView2.Profile.ClearBrowsingDataAsync(
+				CoreWebView2BrowsingDataKinds.Cookies |
+				CoreWebView2BrowsingDataKinds.AllDomStorage);
+
+			// Сбрасываем внутренние кэши авторизации окна.
+			_cachedYandexAuth = null;
+			_cachedDataLensAuth = null;
 		}
 	}
 }

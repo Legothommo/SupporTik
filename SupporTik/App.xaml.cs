@@ -1,4 +1,5 @@
 using Hardcodet.Wpf.TaskbarNotification;
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Win32;
 using SupporTik.Services;
 using System;
@@ -32,6 +33,15 @@ namespace SupporTik
 		private static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
 
 		private const string AppUserModelId = "SupporTik.DesktopApp";
+
+		// URL, который открывается по клику на последний показанный баллун (обновление,
+		// отсутствие WebView2 Runtime) — общий на оба случая, чтобы не плодить отдельные
+		// поля/обработчики клика. Отдельного значения на поток не нужно: клик может прийти
+		// только после того, как баллун реально показан, то есть после того, как поле уже
+		// установлено.
+		private static string _pendingBalloonUrl;
+
+		private const string WebView2DownloadUrl = "https://developer.microsoft.com/microsoft-edge/webview2/";
 
 		/// <summary>
 		/// SetCurrentProcessExplicitAppUserModelID сам по себе ничего не регистрирует —
@@ -74,6 +84,8 @@ namespace SupporTik
 
 		protected override async void OnStartup(StartupEventArgs e)
 		{
+			LoggingService.CleanupOldLogs();
+
 			// Обязательно ДО первого обращения к TaskbarIcon (FindResource ниже её и создаёт) —
 			// иначе Hardcodet уже успеет сгенерировать свой случайный AUMID
 			RegisterAppUserModelId();
@@ -86,6 +98,9 @@ namespace SupporTik
 			ServicePointManager.DefaultConnectionLimit = 20;
 
 			var notifyIcon = (TaskbarIcon)Application.Current.FindResource("MyNotifyIcon");
+			notifyIcon.TrayBalloonTipClicked += NotifyIcon_TrayBalloonTipClicked;
+
+			RegisterGlobalExceptionHandlers(notifyIcon);
 
 			try
 			{
@@ -114,9 +129,12 @@ namespace SupporTik
 
 			base.OnStartup(e);
 
-			// Применяем сохранённую тему (светлая/тёмная) и пастельный акцент поверх неё —
-			// иначе кнопки Appearance="Primary" и подобные элементы взяли бы системный синий
-			ThemeService.Apply(SupporTik.Properties.Settings.Default.IsLightTheme);
+			// Применяем тему (системную или последнюю выбранную вручную) и пастельный акцент
+			// поверх неё — иначе кнопки Appearance="Primary" и подобные элементы взяли бы
+			// системный синий
+			ThemeService.ApplyStartupTheme();
+
+			CheckWebView2Runtime(notifyIcon);
 
 			CompositionRoot.Initialize(notifyIcon);
 			CompositionRoot.Current.Hotkeys.RegisterDefaultHotkeys();
@@ -126,6 +144,97 @@ namespace SupporTik
 			{
 				mainWindow.Show();
 			}
+
+			// Не await — не должно задерживать запуск приложения; при неудаче (нет сети,
+			// GitHub недоступен) UpdateCheckService сам тихо возвращает null
+			_ = CheckForUpdatesAsync(notifyIcon);
+		}
+
+		private static async Task CheckForUpdatesAsync(TaskbarIcon notifyIcon)
+		{
+			UpdateInfo update = await new UpdateCheckService().CheckAsync();
+
+			if (update != null)
+			{
+				ShowUpdateBalloon(notifyIcon, update);
+			}
+		}
+
+		/// <summary>
+		/// Общая точка показа баллуна "доступно обновление" — используется и при
+		/// автопроверке на старте, и при ручной проверке из настроек (см.
+		/// SettingsPageViewModel), чтобы клик по баллуну в обоих случаях открывал
+		/// нужную ссылку одним и тем же механизмом.
+		/// </summary>
+		public static void ShowUpdateBalloon(TaskbarIcon notifyIcon, UpdateInfo update)
+		{
+			_pendingBalloonUrl = update.ReleaseUrl;
+			notifyIcon.ShowBalloonTip("Доступно обновление", $"Вышла версия {update.Version} — нажмите, чтобы открыть страницу релиза.", BalloonIcon.Info);
+		}
+
+		/// <summary>
+		/// "Меню рекламы" держится на WebView2 (авторизация и парсинг через встроенный
+		/// браузер) — без установленного Evergreen-рантайма оно просто не заработает, с
+		/// малопонятной ошибкой в момент открытия окна. Проверяем один раз при старте и,
+		/// если рантайма нет, сразу предупреждаем со ссылкой на установку, а не оставляем
+		/// пользователя гадать, почему окно не открылось.
+		/// </summary>
+		private static void CheckWebView2Runtime(TaskbarIcon notifyIcon)
+		{
+			try
+			{
+				string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+
+				if (!string.IsNullOrEmpty(version))
+				{
+					return;
+				}
+			}
+			catch (Exception)
+			{
+				// WebView2RuntimeNotFoundException и подобные — считаем, что рантайма нет
+			}
+
+			_pendingBalloonUrl = WebView2DownloadUrl;
+			notifyIcon.ShowBalloonTip("WebView2 Runtime не найден", "«Меню рекламы» не сможет работать без него — нажмите, чтобы скачать.", BalloonIcon.Warning);
+		}
+
+		private static void NotifyIcon_TrayBalloonTipClicked(object sender, RoutedEventArgs e)
+		{
+			if (string.IsNullOrEmpty(_pendingBalloonUrl))
+			{
+				return;
+			}
+
+			Process.Start(new ProcessStartInfo(_pendingBalloonUrl) { UseShellExecute = true });
+		}
+
+		/// <summary>
+		/// Ничего из этого не должно ронять приложение молча — раньше единственным
+		/// способом узнать о фоновом падении (хук хоткеев, WebView2, таймеры) было
+		/// оказаться рядом с открытой консолью в момент сбоя. Теперь любое
+		/// необработанное исключение уходит в файл лога (см. LoggingService), а
+		/// исключения потока UI дополнительно не роняют окно — просто логируются.
+		/// </summary>
+		private static void RegisterGlobalExceptionHandlers(TaskbarIcon notifyIcon)
+		{
+			AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+			{
+				LoggingService.LogError("AppDomain.UnhandledException", args.ExceptionObject as Exception);
+			};
+
+			TaskScheduler.UnobservedTaskException += (s, args) =>
+			{
+				LoggingService.LogError("TaskScheduler.UnobservedTaskException", args.Exception);
+				args.SetObserved();
+			};
+
+			Current.DispatcherUnhandledException += (s, args) =>
+			{
+				LoggingService.LogError("DispatcherUnhandledException", args.Exception);
+				notifyIcon.ShowBalloonTip("Произошла ошибка", "SupporTik продолжает работать. Подробности сохранены в лог.", BalloonIcon.Warning);
+				args.Handled = true;
+			};
 		}
 
 		protected override void OnExit(ExitEventArgs e)
