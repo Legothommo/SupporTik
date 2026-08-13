@@ -59,12 +59,6 @@ namespace SupporTik.Services
 			_usageFlushTimer.Start();
 		}
 
-		private void RecordUsage(BindKeys bind)
-		{
-			bind.UsageCount++;
-			_usageDirty = true;
-		}
-
 		private void FlushUsageIfDirty()
 		{
 			if (!_usageDirty)
@@ -183,7 +177,6 @@ namespace SupporTik.Services
 						bind.Modifiers,
 						() =>
 						{
-							RecordUsage(bind);
 							_pasteService.PasteText(bind.Text);
 						});
 				}
@@ -328,7 +321,6 @@ namespace SupporTik.Services
 					Name = bind.Name,
 					Action = () =>
 					{
-						RecordUsage(bind);
 						_pasteService.PasteText(bind.Text);
 					}
 				})
