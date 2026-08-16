@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using SupporTik.ViewModels;
+using SupporTik.Helpers;
 
 namespace SupporTik.Controls
 {
@@ -42,6 +43,15 @@ namespace SupporTik.Controls
 			{
 				Card.BorderBrush = _viewModel.IsSelected ? (Brush)Application.Current.FindResource("AccentGreen") : null;
 			}
+		}
+
+		private void CopyUpsale_Click(object sender, RoutedEventArgs e)
+		{
+			if (_viewModel == null || !(sender is FrameworkElement button)) return;
+			MarketingTemplateMenu.Open(
+				button,
+				_viewModel.GetCompatibleTemplates(),
+				template => _viewModel.CopyWithTemplateCommand.Execute(template));
 		}
 	}
 }

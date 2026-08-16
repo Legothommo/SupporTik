@@ -16,6 +16,13 @@ namespace SupporTik.Services
 	public class ThemeService : IThemeService
 	{
 		private static readonly Color AccentColor = Color.FromRgb(0x9A, 0xA3, 0xEB);
+		private static event EventHandler ThemeApplied;
+
+		public event EventHandler ThemeChanged
+		{
+			add { ThemeApplied += value; }
+			remove { ThemeApplied -= value; }
+		}
 
 		public bool IsLightTheme => Properties.Settings.Default.IsLightTheme;
 		public bool IsFollowingSystem => Properties.Settings.Default.FollowSystemTheme;
@@ -25,6 +32,7 @@ namespace SupporTik.Services
 		{
 			SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged;
 			Properties.Settings.Default.FollowSystemTheme = false;
+			Properties.Settings.Default.ThemePreferenceInitialized = true;
 
 			ApplyAndPersist(isLight);
 		}
@@ -32,6 +40,7 @@ namespace SupporTik.Services
 		public void SetFollowSystem(bool follow)
 		{
 			Properties.Settings.Default.FollowSystemTheme = follow;
+			Properties.Settings.Default.ThemePreferenceInitialized = true;
 
 			SystemEvents.UserPreferenceChanged -= OnSystemPreferenceChanged;
 
@@ -53,6 +62,14 @@ namespace SupporTik.Services
 		/// </summary>
 		public static void ApplyStartupTheme()
 		{
+			if (!Properties.Settings.Default.ThemePreferenceInitialized)
+			{
+				Properties.Settings.Default.FollowSystemTheme = true;
+				Properties.Settings.Default.IsLightTheme = ReadSystemIsLightTheme();
+				Properties.Settings.Default.ThemePreferenceInitialized = true;
+				Properties.Settings.Default.Save();
+			}
+
 			bool followSystem = Properties.Settings.Default.FollowSystemTheme;
 			bool isLight = followSystem ? ReadSystemIsLightTheme() : Properties.Settings.Default.IsLightTheme;
 
@@ -113,6 +130,7 @@ namespace SupporTik.Services
 			ApplicationAccentColorManager.Apply(AccentColor, theme, false);
 
 			ApplyColorPalette(isLight);
+			ThemeApplied?.Invoke(null, EventArgs.Empty);
 		}
 
 		private static void ApplyColorPalette(bool isLight)

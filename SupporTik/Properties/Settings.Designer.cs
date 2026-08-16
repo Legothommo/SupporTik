@@ -121,15 +121,27 @@ namespace SupporTik.Properties {
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool FollowSystemTheme {
+		[global::System.Configuration.DefaultSettingValueAttribute("True")]
+		public bool FollowSystemTheme {
             get {
                 return ((bool)(this["FollowSystemTheme"]));
-            }
-            set {
-                this["FollowSystemTheme"] = value;
-            }
-        }
+			}
+			set {
+				this["FollowSystemTheme"] = value;
+			}
+		}
+
+		[global::System.Configuration.UserScopedSettingAttribute()]
+		[global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+		[global::System.Configuration.DefaultSettingValueAttribute("False")]
+		public bool ThemePreferenceInitialized {
+			get {
+				return ((bool)(this["ThemePreferenceInitialized"]));
+			}
+			set {
+				this["ThemePreferenceInitialized"] = value;
+			}
+		}
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]

@@ -21,6 +21,7 @@ namespace SupporTik.ViewModels
 		private readonly INotificationService _notificationService;
 		private readonly IUpsaleService _upsaleService;
 		private readonly IBudgetService _budgetService;
+		private readonly MarketingOfferTextBuilder _textBuilder;
 
 		/// <summary>
 		/// Авторизация в DataLens — отдельный сайт (datalens.yandex-team.ru) со своей
@@ -29,14 +30,15 @@ namespace SupporTik.ViewModels
 		/// кэширует результат между вызовами — bool здесь просит его обновить кэш заново
 		/// (используем, если запрос с закэшированным токеном всё же не сработал).
 		/// </summary>
-		private readonly Func<bool, Task<(string CookieHeader, string CsrfToken)>> _ensureDataLensAuth;
+		private readonly Func<bool, CancellationToken, Task<(string CookieHeader, string CsrfToken)>> _ensureDataLensAuth;
 
 		/// <summary>
 		/// Куки/CSRF-токен уже авторизованной страницы yandex.ru/business — для прямых
 		/// API-запросов за списком кампаний. Тем же приёмом, что и для DataLens (делегат
 		/// с кэшем на стороне View, а не прямой доступ к WebView2 из VM).
 		/// </summary>
-		private readonly Func<bool, Task<YandexBusinessAuth>> _getYandexBusinessAuth;
+		private readonly Func<bool, CancellationToken, Task<YandexBusinessAuth>> _getYandexBusinessAuth;
+		private CancellationTokenSource _operationCancellation;
 
 		private static readonly Regex RenewalDaysRegex = new Regex(@"\d+");
 
@@ -98,7 +100,6 @@ namespace SupporTik.ViewModels
 			get => _isSearchUiVisible;
 			set => SetProperty(ref _isSearchUiVisible, value);
 		}
-
 		/// <summary>
 		/// Уникальные статусы из последнего поиска — независимые галки, можно выбрать
 		/// сразу несколько. Список строится заново из реально спарсенных данных
@@ -153,6 +154,7 @@ namespace SupporTik.ViewModels
 				if (SetProperty(ref _isSearching, value))
 				{
 					OnPropertyChanged(nameof(IsNotSearching));
+					CommandManager.InvalidateRequerySuggested();
 				}
 			}
 		}
@@ -261,7 +263,7 @@ namespace SupporTik.ViewModels
 		public ICommand SearchCommand { get; }
 		public ICommand CopySelectedCommand { get; }
 		public ICommand CheckUpsalesCommand { get; }
-		public ICommand CopySelectedUpsalesCommand { get; }
+		public ICommand CancelOperationCommand { get; }
 
 		// Кэш авторизации живёт во View между вызовами — если запрос всё же упал (сессия
 		// протухла), просим View обновить его заново при следующей попытке, а не каждый раз
@@ -278,13 +280,15 @@ namespace SupporTik.ViewModels
 			INotificationService notificationService,
 			IUpsaleService upsaleService,
 			IBudgetService budgetService,
-			Func<bool, Task<(string CookieHeader, string CsrfToken)>> ensureDataLensAuth,
-			Func<bool, Task<YandexBusinessAuth>> getYandexBusinessAuth)
+			MarketingOfferTextBuilder textBuilder,
+			Func<bool, CancellationToken, Task<(string CookieHeader, string CsrfToken)>> ensureDataLensAuth,
+			Func<bool, CancellationToken, Task<YandexBusinessAuth>> getYandexBusinessAuth)
 		{
 			_campaignService = campaignService;
 			_notificationService = notificationService;
 			_upsaleService = upsaleService;
 			_budgetService = budgetService;
+			_textBuilder = textBuilder;
 			_ensureDataLensAuth = ensureDataLensAuth;
 			_getYandexBusinessAuth = getYandexBusinessAuth;
 
@@ -295,16 +299,56 @@ namespace SupporTik.ViewModels
 			UpdateRoleFilterSummary();
 			UpdateUpsaleFilterSummary();
 
-			SearchCommand = new AsyncRelayCommand(SearchAsync);
+			SearchCommand = new AsyncRelayCommand(SearchAsync, () => !IsSearching);
 			CopySelectedCommand = new RelayCommand(CopySelected);
-			CheckUpsalesCommand = new AsyncRelayCommand(CheckUpsalesAsync);
-			CopySelectedUpsalesCommand = new RelayCommand(CopySelectedUpsales);
+			CheckUpsalesCommand = new AsyncRelayCommand(CheckUpsalesAsync, () => !IsSearching);
+			CancelOperationCommand = new RelayCommand(CancelCurrentOperation, () => IsSearching);
 
 			string saved = Properties.Settings.Default.RecentMarketingUids ?? string.Empty;
 			foreach (string uid in saved.Split('|').Where(u => !string.IsNullOrEmpty(u)))
 			{
 				RecentUids.Add(uid);
 			}
+		}
+
+		private string _upsaleResultSummary = string.Empty;
+		public string UpsaleResultSummary
+		{
+			get => _upsaleResultSummary;
+			private set
+			{
+				if (SetProperty(ref _upsaleResultSummary, value))
+				{
+					OnPropertyChanged(nameof(HasUpsaleResultSummary));
+				}
+			}
+		}
+
+		public bool HasUpsaleResultSummary => !string.IsNullOrEmpty(UpsaleResultSummary);
+
+		private CancellationToken BeginOperation()
+		{
+			_operationCancellation?.Cancel();
+			_operationCancellation?.Dispose();
+			_operationCancellation = new CancellationTokenSource();
+			return _operationCancellation.Token;
+		}
+
+		private void CancelCurrentOperation()
+		{
+			_operationCancellation?.Cancel();
+		}
+
+		private void EndOperation(CancellationToken cancellationToken)
+		{
+			if (_operationCancellation == null || _operationCancellation.Token != cancellationToken)
+			{
+				return;
+			}
+
+			_operationCancellation.Dispose();
+			_operationCancellation = null;
+			IsSearching = false;
 		}
 
 		/// <summary>Запоминает успешно искавшийся UID — свежий вперёд, без дублей, не больше MaxRecentUids штук.</summary>
@@ -494,13 +538,14 @@ namespace SupporTik.ViewModels
 				return;
 			}
 
+			CancellationToken cancellationToken = BeginOperation();
 			IsSearching = true;
 			NothingToSearch = false;
 			SearchButtonLabel = "Поиск...";
 
 			try
 			{
-				YandexBusinessAuth auth = await _getYandexBusinessAuth(_forceRefreshYandexAuth);
+				YandexBusinessAuth auth = await _getYandexBusinessAuth(_forceRefreshYandexAuth, cancellationToken);
 
 				if (string.IsNullOrEmpty(auth.CsrfToken))
 				{
@@ -515,7 +560,7 @@ namespace SupporTik.ViewModels
 				_forceRefreshYandexAuth = false;
 
 				var progress = new Progress<string>(text => SearchButtonLabel = text);
-				List<MarketingItem> items = await _campaignService.SearchAsync(uid, auth, progress);
+				List<MarketingItem> items = await _campaignService.SearchAsync(uid, auth, progress, cancellationToken);
 
 				AddRecentUid(uid);
 
@@ -534,7 +579,8 @@ namespace SupporTik.ViewModels
 				// ReplaceRange (одно уведомление вместо N)
 				var notificationService = _notificationService;
 				List<MarketingItemViewModel> vms = await Task.Run(() =>
-					_allItems.Select(item => new MarketingItemViewModel(item, notificationService)).ToList());
+					_allItems.Select(item => new MarketingItemViewModel(item, notificationService, _textBuilder)).ToList(),
+					cancellationToken);
 
 				// Подписка нужна для двусторонней синхронизации с SelectAll (см.
 				// Item_PropertyChanged) — старые карточки из прошлого поиска отписывать не
@@ -565,23 +611,33 @@ namespace SupporTik.ViewModels
 
 					if (lazyCheckItems.Count > 0)
 					{
-						await CheckUpsalesForItemsAsync(lazyCheckItems, progress);
+						await CheckUpsalesForItemsAsync(lazyCheckItems, progress, cancellationToken);
 						ShowOffersOnly();
 					}
 				}
 			}
 
+			catch (OperationCanceledException)
+			{
+				// Пользователь отменил операцию — это штатное действие, не ошибка.
+			}
+			catch (ServiceRequestException ex)
+			{
+				_forceRefreshYandexAuth = true;
+				_notificationService.ShowBalloon("Ошибка", ex.Message, isWarning: true);
+			}
 			catch (Exception ex)
 			{
 				// Кэш токена (см. MarketingWindow.EnsureDataLensAuthAsync/GetYandexBusinessAuthAsync)
 				// мог протухнуть — при следующей попытке просим View обновить его заново
 				_forceRefreshYandexAuth = true;
-				_notificationService.ShowBalloon("Ошибка", ex.Message, isWarning: true);
+				LoggingService.LogError("MarketingWindowViewModel.SearchAsync", ex);
+				_notificationService.ShowBalloon("Ошибка", "Не удалось выполнить поиск. Подробности сохранены в лог.", isWarning: true);
 			}
 			finally
 			{
 				SearchButtonLabel = "Поиск";
-				IsSearching = false;
+				EndOperation(cancellationToken);
 			}
 		}
 
@@ -639,102 +695,6 @@ namespace SupporTik.ViewModels
 			_notificationService.ShowBalloon("Скопировано", $"Пермалинков в буфере: {permalinks.Count}", isWarning: false);
 		}
 
-		/// <summary>
-		/// Собирает текст предложения (см. MarketingItemViewModel.BuildUpsaleText) по всем
-		/// отмеченным карточкам и кладёт в буфер одним куском — тот же принцип отбора, что
-		/// и у CheckUpsalesCommand/CopySelectedCommand (Items.Where(i => i.IsSelected)).
-		/// </summary>
-		private void CopySelectedUpsales()
-		{
-			var selected = Items.Where(i => i.IsSelected).ToList();
-
-			if (selected.Count <= 1)
-			{
-				_notificationService.ShowBalloon("Предупреждение", "Отметьте хотя бы одну карточку.", isWarning: true);
-				return;
-			}
-
-			var text = BuildUpsalesText(selected);
-			if (text != null)
-			{
-				Clipboard.SetText(text);
-				_notificationService.ShowBalloon("Скопировано", $"Текстов в буфере: {selected.Count}", isWarning: false);
-			}
-		}
-
-		public string BuildUpsalesText(List<MarketingItemViewModel> items)
-		{
-			var hasOneRole = items
-				.Select(x => x.Role)
-				.Distinct();
-
-			// Проверяем ДО .Contains ниже — у "Не проверено"/"Нет предложения"/"Не продавать"
-			// UpsaleValue либо null, либо не содержит "Продление", иначе .Contains упадёт на null
-			bool hasUpsale = items.All(x =>
-				!string.IsNullOrEmpty(x.UpsaleValue) &&
-				x.UpsaleValue != "Нет предложения" &&
-				x.UpsaleValue != "Проверь в ЛК" &&
-				x.UpsaleValue != "Не продавать" ||
-				!x.HasUpsale);
-
-			if (!hasUpsale) { _notificationService.ShowBalloon("Предупреждение", "Выбери кампании с предложениями", isWarning: true); return null; }
-			if (hasOneRole.Count() != 1) { _notificationService.ShowBalloon("Предупреждение", "Нельзя выбирать разные роли.", isWarning: true); return null; }
-
-			bool allUpsalesAreInt = items.All(x => int.TryParse(x.UpsaleValue, out _));
-			bool allUpsalesAreString = items.All(x => x.UpsaleValue.Contains("Продление"));
-
-			if (!allUpsalesAreInt && !allUpsalesAreString) { _notificationService.ShowBalloon("Предупреждение", "Нельзя выбирать разные предложения.", isWarning: true); return null; }
-
-			var result = string.Empty;
-			var firstStroke = string.Empty;
-			var secondStroke = string.Empty;
-
-			if (allUpsalesAreInt)
-			{
-				firstStroke = string.Join("\r\n",
-					items.Select(item => item.IsMulti
-						? $"- [https://yandex.ru/business/subscription/campaign/{item.DisplayPermalink}?upsale_budget={item.UpsaleValue}&show_popup=upsale](https://yandex.ru/business/subscription/campaign/{item.DisplayPermalink}?upsale_budget={item.UpsaleValue}&show_popup=upsale)"
-						: $"- [https://yandex.ru/business/priority/campaign/{item.DisplayPermalink}/main?show_popup=upsale&upsale_budget={item.UpsaleValue}](https://yandex.ru/business/priority/campaign/{item.DisplayPermalink}/main?show_popup=upsale&upsale_budget={item.UpsaleValue})"));
-
-				result = $"Мы заметили, что вам доступны увеличения бюджета для ваших рекламных кампаний. Увеличьте месячный бюджет на продвижения, чтобы повысить их охват:\r\n\r\n" +
-					$"{firstStroke}\r\n\r\n" +
-					$"Алгоритм подбирает площадки и публикует объявления в пределах бюджета, который вы выбрали. Если его увеличить, объявления будут публиковаться чаще и на новых площадках. Это расширит клиентскую базу — об организации узнает больше пользователей.";
-
-				if (hasOneRole.First() == "Наблюдатель")
-				{
-					result += "\r\n\r\nПодробности отправим на почту владельца продвижения. Предложение действует 7 дней";
-				}
-			}
-			if (allUpsalesAreString)
-			{
-				firstStroke = string.Join("\r\n",
-						items.Select(item => $"- № {item.DisplayPermalink}")) + ".";
-				secondStroke = string.Join("\r\n",
-					items.Select(item =>
-					{
-						int days = int.Parse(item.UpsaleValue.Split(' ')[1]);
-						return $"- № {item.DisplayPermalink} на {days} дней - {item.AmountUpsale} ₽";
-					})) + ".";
-
-				if (hasOneRole.First() == "Наблюдатель")
-				{
-					result = $"Мы заметили, что скоро завершатся кампании по продвижению:\r\n\r\n" +
-						$"{firstStroke}\r\n\r\n" +
-						$"Продлите их, чтобы избежать перерыва в показах.\r\n\r\n" +
-						$"Отправим подробности владельцам кампаний на почту";
-				}
-				else
-				{
-					result = $"Мы заметили, что скоро завершатся кампании ваши по продвижению:\r\n\r\n" +
-						$"{firstStroke}\r\n\r\n" +
-						$"Продлите их, чтобы избежать перерыва в показах. Стоимость продления:\r\n\r\n" +
-						$"{secondStroke}\r\n\r\n" +
-						$"Тарифы на 180 или 360 дней помогут сэкономить до 25% затрат. Отметим, что чем дольше клиенты видят вас, тем надёжнее будет поток заявок";
-				}
-			}
-			return result;
-		}
-
 		private async Task CheckUpsalesAsync()
 		{
 			var selected = Items.Where(i => i.IsSelected).ToList();
@@ -745,22 +705,34 @@ namespace SupporTik.ViewModels
 				return;
 			}
 
+			CancellationToken cancellationToken = BeginOperation();
+			UpsaleResultSummary = string.Empty;
 			IsSearching = true;
 
 			try
 			{
 				var progress = new Progress<string>(text => UpsaleButtonLabel = text);
-				await CheckUpsalesForItemsAsync(selected, progress);
+				await CheckUpsalesForItemsAsync(selected, progress, cancellationToken);
 			}
-			catch (Exception ex)
+			catch (OperationCanceledException)
+			{
+				// Пользователь отменил операцию.
+			}
+			catch (ServiceRequestException ex)
 			{
 				_forceRefreshDataLensAuth = true;
 				_notificationService.ShowBalloon("Ошибка", ex.Message, isWarning: true);
 			}
+			catch (Exception ex)
+			{
+				_forceRefreshDataLensAuth = true;
+				LoggingService.LogError("MarketingWindowViewModel.CheckUpsalesAsync", ex);
+				_notificationService.ShowBalloon("Ошибка", "Не удалось проверить предложения. Подробности сохранены в лог.", isWarning: true);
+			}
 			finally
 			{
 				UpsaleButtonLabel = "Проверить апсейлы";
-				IsSearching = false;
+				EndOperation(cancellationToken);
 			}
 		}
 
@@ -771,13 +743,14 @@ namespace SupporTik.ViewModels
 		/// </summary>
 		private async Task CheckUpsalesForItemsAsync(
 				List<MarketingItemViewModel> items,
-				IProgress<string> progress)
+				IProgress<string> progress,
+				CancellationToken cancellationToken)
 		{
 			// Первая попытка:
 			// если ранее был установлен forceRefresh — обновляем сразу,
 			// иначе используем обычную/закэшированную авторизацию.
 			var (cookieHeader, csrfToken) =
-				await _ensureDataLensAuth(_forceRefreshDataLensAuth);
+				await _ensureDataLensAuth(_forceRefreshDataLensAuth, cancellationToken);
 
 			// ------------------------------------------------------------
 			// Если DataLens ещё не был авторизован.
@@ -794,7 +767,7 @@ namespace SupporTik.ViewModels
 				progress?.Report("Авторизация в DataLens...");
 
 				(cookieHeader, csrfToken) =
-					await _ensureDataLensAuth(true);
+					await _ensureDataLensAuth(true, cancellationToken);
 			}
 
 			// После второй попытки токена всё ещё нет —
@@ -826,7 +799,8 @@ namespace SupporTik.ViewModels
 					cookieHeader,
 					csrfToken,
 					campaignIds,
-					progress);
+					progress,
+					cancellationToken);
 
 
 			foreach (var item in items)
@@ -843,11 +817,59 @@ namespace SupporTik.ViewModels
 
 			await ResolveCampaignDetailsAsync(
 				items,
-				progress);
+				progress,
+				cancellationToken);
 
 
 			RebuildUpsaleFilters();
 			RefreshItemsView();
+			UpdateUpsaleResultSummary(items);
+		}
+
+		private void UpdateUpsaleResultSummary(IReadOnlyList<MarketingItemViewModel> items)
+		{
+			int errors = items.Count(item => item.UpsaleValue == "Ошибка");
+			int completed = items.Count(item =>
+				!string.IsNullOrEmpty(item.UpsaleValue) && item.UpsaleValue != "Не проверено");
+			int successful = Math.Max(0, completed - errors);
+			UpsaleResultSummary = $"Проверено: {completed}/{items.Count} · успешно: {successful} · ошибок: {errors}";
+		}
+
+		public IReadOnlyList<MarketingTextTemplate> GetCompatibleTemplatesForSelected()
+		{
+			List<MarketingItem> selected = Items
+				.Where(item => item.IsSelected)
+				.Select(item => item.Model)
+				.ToList();
+			IReadOnlyList<MarketingTextTemplate> templates =
+				_textBuilder.GetTemplatesForMultiple(selected, out string error);
+
+			if (error != null)
+			{
+				_notificationService.ShowBalloon("Предупреждение", error, isWarning: true);
+			}
+			else if (templates.Count == 0)
+			{
+				_notificationService.ShowBalloon("Шаблоны", "Для выбранных кампаний нет подходящих шаблонов.", isWarning: true);
+			}
+
+			return templates;
+		}
+
+		public void CopySelectedUpsalesWithTemplate(MarketingTextTemplate template)
+		{
+			List<MarketingItemViewModel> selected = Items.Where(item => item.IsSelected).ToList();
+			MarketingTextBuildResult result = _textBuilder.BuildMultiple(
+				selected.Select(item => item.Model).ToList(),
+				template);
+			if (!result.Success)
+			{
+				_notificationService.ShowBalloon("Предупреждение", result.Error, isWarning: true);
+				return;
+			}
+
+			Clipboard.SetText(result.Text);
+			_notificationService.ShowBalloon("Скопировано", "Общее предложение скопировано.", isWarning: false);
 		}
 
 		/// <summary>
@@ -864,7 +886,10 @@ namespace SupporTik.ViewModels
 		/// конкретной кампании не получилось — просто пропускает её, не прерывая проверку
 		/// остальных.
 		/// </summary>
-		private async Task ResolveCampaignDetailsAsync(List<MarketingItemViewModel> items, IProgress<string> progress)
+		private async Task ResolveCampaignDetailsAsync(
+			List<MarketingItemViewModel> items,
+			IProgress<string> progress,
+			CancellationToken cancellationToken)
 		{
 			var relevantItems = items
 				.Where(i => !string.IsNullOrEmpty(i.RawPermalink))
@@ -877,7 +902,7 @@ namespace SupporTik.ViewModels
 
 			// cookieHeader общий для всех кампаний (сессия yandex.ru) — тот же самый, что
 			// уже используется для списка кампаний, кэшируется во View между вызовами
-			YandexBusinessAuth auth = await _getYandexBusinessAuth(false);
+			YandexBusinessAuth auth = await _getYandexBusinessAuth(false, cancellationToken);
 
 			if (string.IsNullOrEmpty(auth.CookieHeader))
 			{
@@ -890,7 +915,7 @@ namespace SupporTik.ViewModels
 			{
 				var tasks = relevantItems.Select(async item =>
 				{
-					await throttle.WaitAsync();
+					await throttle.WaitAsync(cancellationToken);
 					try
 					{
 						bool isRenewal = !string.IsNullOrEmpty(item.UpsaleValue) && item.UpsaleValue.Contains("Продление");
@@ -903,22 +928,34 @@ namespace SupporTik.ViewModels
 								return;
 							}
 
-							var result = await _budgetService.CalculateRenewalAmountAsync(item.CompanyPermalink, item.RawPermalink, auth.CookieHeader, durationDays);
+							var result = await _budgetService.CalculateRenewalAmountAsync(
+								item.CompanyPermalink,
+								item.RawPermalink,
+								auth.CookieHeader,
+								durationDays,
+								cancellationToken);
 
 							if (result != null)
 							{
-								item.SetAmountUpsale(result[0]);
-								item.SetPrediction(result[1]);
-								item.SetIsMulti(result.TryGetValue(2, out string isMultiRaw) && bool.TryParse(isMultiRaw, out bool isMulti) && isMulti);
-								item.SetHasBudgetIncreaseButton(result.TryGetValue(3, out string hasButtonRaw) && bool.TryParse(hasButtonRaw, out bool hasButton) && hasButton);
+								item.SetAmountUpsale(result.Amount);
+								item.SetPrediction(result.Prediction);
+								item.SetIsMulti(result.IsMulti);
+								item.SetHasBudgetIncreaseButton(result.HasBudgetIncreaseButton);
 							}
 						}
 						else
 						{
-							var flags = await _budgetService.GetCampaignFlagsAsync(item.RawPermalink, auth.CookieHeader);
+							var flags = await _budgetService.GetCampaignFlagsAsync(
+								item.RawPermalink,
+								auth.CookieHeader,
+								cancellationToken);
 							item.SetIsMulti(flags.IsMulti);
 							item.SetHasBudgetIncreaseButton(flags.HasBudgetIncreaseButton);
 						}
+					}
+					catch (OperationCanceledException)
+					{
+						throw;
 					}
 					catch (Exception)
 					{

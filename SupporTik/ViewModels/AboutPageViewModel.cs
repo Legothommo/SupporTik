@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using Newtonsoft.Json.Linq;
@@ -11,6 +12,12 @@ namespace SupporTik.ViewModels
 {
 	public class AboutPageViewModel : ViewModelBase
 	{
+		public string VersionText { get; } =
+			"v" + Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
+
+		public string RuntimeText { get; } =
+			$".NET Framework 4.8 · {(Environment.Is64BitProcess ? "64-bit" : "32-bit")}";
+
 		// Один HttpClient на всё приложение — создавать новый на каждый запрос не стоит
 		// (истощает пул сокетов при частых обновлениях). Таймаут — то, чего не хватало
 		// в старой реализации на BitmapImage.UriSource: без него зависший запрос вешал

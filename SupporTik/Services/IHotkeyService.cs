@@ -9,8 +9,7 @@ namespace SupporTik.Services
 {
 	public interface IHotkeyService
 	{
-		void RegisterHotkey(string name, Key key, ModifierKeys modifiers, Action action);
-		void UnregisterHotkey(string name);
+		void RegisterHotkey(Key key, ModifierKeys modifiers, Action action);
 		void UnregisterAll();
 
 		/// <summary>

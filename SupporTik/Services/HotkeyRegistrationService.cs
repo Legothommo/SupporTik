@@ -31,16 +31,6 @@ namespace SupporTik.Services
 
 		private MarketingWindow _marketingWindow;
 
-		// Счётчик использования копится в памяти на каждую вставку (дёшево — инкремент
-		// инта), а на диск пишется не сразу, а раз в UsageFlushIntervalMs, если что-то
-		// накопилось. Само наращивание вызывается синхронно изнутри низкоуровневого хука
-		// клавиатуры (см. RegisterHotkey/BuildQuickMenuEntries ниже) — как и в
-		// BindItemViewModel.OnKeysCaptured, диск оттуда трогать нельзя (риск таймаута хука),
-		// поэтому запись идёт отдельным таймером на ThreadPool-потоке.
-		private const int UsageFlushIntervalMs = 30000;
-		private readonly System.Timers.Timer _usageFlushTimer;
-		private volatile bool _usageDirty;
-
 		public IReadOnlyList<BindKeys> BindKeys => _bindKeys;
 
 		public HotkeyRegistrationService(StorageService storage, IHotkeyService hotkeyService,
@@ -53,21 +43,6 @@ namespace SupporTik.Services
 			_notifyIcon = notifyIcon;
 
 			_groupInfos = _storage.LoadData<BindGroupInfo>("groups.json");
-
-			_usageFlushTimer = new System.Timers.Timer(UsageFlushIntervalMs) { AutoReset = true };
-			_usageFlushTimer.Elapsed += (s, e) => FlushUsageIfDirty();
-			_usageFlushTimer.Start();
-		}
-
-		private void FlushUsageIfDirty()
-		{
-			if (!_usageDirty)
-			{
-				return;
-			}
-
-			_usageDirty = false;
-			_storage.SaveData(_bindKeys);
 		}
 
 		#region Бинды
@@ -164,15 +139,13 @@ namespace SupporTik.Services
 			{
 				var binds = group.ToList();
 				var firstBind = binds[0];
+				var matchingSpecials = specials.Where(s =>
+					s.Key != Key.None && s.Key == firstBind.Key && s.Modifiers == firstBind.Modifiers).ToList();
 
-				bool collidesWithSpecial = specials.Any(s =>
-					s.Key != Key.None && s.Key == firstBind.Key && s.Modifiers == firstBind.Modifiers);
-
-				if (binds.Count == 1 && !collidesWithSpecial)
+				if (binds.Count == 1 && matchingSpecials.Count == 0)
 				{
 					var bind = binds[0];
 					_hotkeyService.RegisterHotkey(
-						bind.Name,
 						bind.Key,
 						bind.Modifiers,
 						() =>
@@ -185,41 +158,47 @@ namespace SupporTik.Services
 					// Либо несколько шаблонов на одном сочетании, либо оно совпадает со
 					// специальным хоткеем (или и то, и другое) — в обоих случаях нужен выбор
 					_hotkeyService.RegisterHotkey(
-						"OpenQuickMenu" + firstBind.Name,
 						firstBind.Key,
 						firstBind.Modifiers,
-						() => OnQuickMenuHotkeyPressed(binds));
+						() => OnQuickMenuHotkeyPressed(binds, matchingSpecials));
 				}
 			}
 
-			// Специальные хоткеи регистрируем отдельно, только если их сочетание не занято
-			// ни одним биндом — если занято, оно уже вошло в QuickTextWindow выше
-			foreach (var special in specials)
+			// Оставшиеся специальные хоткеи группируем между собой. Если NDA и меню
+			// рекламы назначены на одно сочетание, ни одно действие не теряется — выбор
+			// показывается в том же быстром меню, что и при коллизии обычных биндов.
+			var standaloneSpecialGroups = specials
+				.Where(s => s.Key != Key.None && !groups.Any(g =>
+					g.Key.Key == s.Key && g.Key.Modifiers == s.Modifiers))
+				.GroupBy(s => new { s.Key, s.Modifiers });
+
+			foreach (var specialGroup in standaloneSpecialGroups)
 			{
-				if (special.Key == Key.None)
+				var actions = specialGroup.ToList();
+				if (actions.Count == 1)
 				{
-					continue;
+					var special = actions[0];
+					_hotkeyService.RegisterHotkey(special.Key, special.Modifiers, special.Action);
 				}
-
-				bool usedByBind = groups.Any(g => g.Key.Key == special.Key && g.Key.Modifiers == special.Modifiers);
-				if (usedByBind)
+				else
 				{
-					continue;
+					_hotkeyService.RegisterHotkey(
+						specialGroup.Key.Key,
+						specialGroup.Key.Modifiers,
+						() => OnQuickMenuHotkeyPressed(new List<BindKeys>(), actions));
 				}
-
-				_hotkeyService.RegisterHotkey(special.Name, special.Key, special.Modifiers, special.Action);
 			}
 		}
 
-		private void OnQuickMenuHotkeyPressed(List<BindKeys> keys)
+		private void OnQuickMenuHotkeyPressed(List<BindKeys> binds, List<SpecialHotkey> specials)
 		{
-			// Вызываем показ окна возле мыши
 			if (!_pasteService.IsPaused)
 			{
-				var firstBind = keys[0];
-				string groupTitle = GetGroupName(firstBind.Key, firstBind.Modifiers);
+				string groupTitle = binds.Count == 0
+					? null
+					: GetGroupName(binds[0].Key, binds[0].Modifiers);
 
-				_quickMenu.SetEntries(groupTitle, BuildQuickMenuEntries(keys));
+				_quickMenu.SetEntries(groupTitle, BuildQuickMenuEntries(binds, specials));
 				_quickMenu.ShowAtCursor();
 			}
 		}
@@ -291,7 +270,6 @@ namespace SupporTik.Services
 		/// </summary>
 		private class SpecialHotkey
 		{
-			public string Name;
 			public Key Key;
 			public ModifierKeys Modifiers;
 			public string MenuLabel;
@@ -304,7 +282,6 @@ namespace SupporTik.Services
 			{
 				new SpecialHotkey
 				{
-					Name = "NDAReplace",
 					Key = (Key)Properties.Settings.Default.SelectedKey,
 					Modifiers = (ModifierKeys)Properties.Settings.Default.SelectedModifiers,
 					MenuLabel = "NDA Замена",
@@ -312,7 +289,6 @@ namespace SupporTik.Services
 				},
 				new SpecialHotkey
 				{
-					Name = "MarketingMenu",
 					Key = (Key)Properties.Settings.Default.MarketingMenuKey,
 					Modifiers = (ModifierKeys)Properties.Settings.Default.MarketingMenuModifiers,
 					MenuLabel = "Меню рекламы",
@@ -325,7 +301,9 @@ namespace SupporTik.Services
 		/// Собирает пункты всплывающего меню для группы биндов с общим сочетанием клавиш.
 		/// QuickTextWindow сам ничего не знает про BindKeys/настройки — вся эта логика здесь.
 		/// </summary>
-		private List<QuickMenuEntry> BuildQuickMenuEntries(List<BindKeys> binds)
+		private List<QuickMenuEntry> BuildQuickMenuEntries(
+			List<BindKeys> binds,
+			List<SpecialHotkey> specials)
 		{
 			var entries = binds
 				.Select(bind => new QuickMenuEntry
@@ -338,22 +316,14 @@ namespace SupporTik.Services
 				})
 				.ToList();
 
-			// Если это сочетание совпадает со специальным хоткеем (NDA-замена, меню рекламы) —
-			// прямая регистрация для него невозможна (см. RegisterDefaultHotkeys), поэтому
-			// даём доступ к нему отсюда
-			var firstBind = binds[0];
-
-			foreach (var special in GetSpecialHotkeys())
+			foreach (var special in specials)
 			{
-				if (special.Key != Key.None && special.Key == firstBind.Key && special.Modifiers == firstBind.Modifiers)
+				entries.Add(new QuickMenuEntry
 				{
-					entries.Add(new QuickMenuEntry
-					{
-						Name = special.MenuLabel,
-						Action = special.Action,
-						IsSpecial = true
-					});
-				}
+					Name = special.MenuLabel,
+					Action = special.Action,
+					IsSpecial = true
+				});
 			}
 
 			return entries;
@@ -363,7 +333,7 @@ namespace SupporTik.Services
 
 		#region Экспорт / Импорт
 
-		public void ExportData()
+		public void ExportData(bool includeBinds, bool includeSettings, bool includeMarketingTemplates, bool autoStartEnabled)
 		{
 			try
 			{
@@ -372,35 +342,52 @@ namespace SupporTik.Services
 					Filter = "JSON Files (*.json)|*.json",
 					DefaultExt = "json",
 					FileName = "SupporTik_Export.json",
-					Title = "Экспорт биндов, групп и настроек"
+					Title = "Экспорт данных SupporTik"
 				};
 
 				if (saveFileDialog.ShowDialog() == true)
 				{
 					var package = new ExportPackage
 					{
-						Binds = _bindKeys,
-						Groups = _groupInfos,
-						Settings = new ExportSettings
+						Version = 2,
+						Binds = includeBinds ? _bindKeys : null,
+						Groups = includeBinds ? _groupInfos : null,
+						Settings = includeSettings ? new ExportSettings
 						{
 							StartMinimized = Properties.Settings.Default.StartMinimized,
 							MinimizeToTray = Properties.Settings.Default.MinimizeToTray,
 							SelectedKey = Properties.Settings.Default.SelectedKey,
-							SelectedModifiers = Properties.Settings.Default.SelectedModifiers
-						}
+							SelectedModifiers = Properties.Settings.Default.SelectedModifiers,
+							MarketingMenuKey = Properties.Settings.Default.MarketingMenuKey,
+							MarketingMenuModifiers = Properties.Settings.Default.MarketingMenuModifiers,
+							MarketingMenuFromLeft = Properties.Settings.Default.MarketingMenuFromLeft,
+							IsLightTheme = Properties.Settings.Default.IsLightTheme,
+							FollowSystemTheme = Properties.Settings.Default.FollowSystemTheme,
+							AutoStartEnabled = autoStartEnabled,
+							RecentMarketingUids = Properties.Settings.Default.RecentMarketingUids
+						} : null,
+						MarketingTemplates = includeMarketingTemplates
+							? CompositionRoot.Current.MarketingTemplates.GetAll().ToList()
+							: null
 					};
 
-					string json = JsonConvert.SerializeObject(package, Formatting.Indented);
+					string json = JsonConvert.SerializeObject(package, Formatting.Indented,
+						new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
 					File.WriteAllText(saveFileDialog.FileName, json);
+					var exportedSections = new List<string>();
+					if (includeBinds) exportedSections.Add("бинды");
+					if (includeSettings) exportedSections.Add("настройки");
+					if (includeMarketingTemplates) exportedSections.Add("рекламные шаблоны");
 
 					_notifyIcon?.ShowBalloonTip(
 						"Экспорт",
-						"Бинды, группы и настройки успешно сохранены!",
+						$"Сохранено: {string.Join(", ", exportedSections)}.",
 						BalloonIcon.None);
 				}
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
+				LoggingService.LogError("HotkeyRegistrationService.ExportData", ex);
 				_notifyIcon?.ShowBalloonTip(
 					"Экспорт",
 					"Произошла ошибка при экспорте!",
@@ -425,58 +412,115 @@ namespace SupporTik.Services
 				}
 
 				string json = File.ReadAllText(openFileDialog.FileName);
-				ExportPackage package = null;
-
-				try
+				ExportPackage package;
+				if (json.TrimStart().StartsWith("[", StringComparison.Ordinal))
+				{
+					// Самый старый формат: в корне лежал только список биндов.
+					package = new ExportPackage
+					{
+						Binds = JsonConvert.DeserializeObject<List<BindKeys>>(json)
+					};
+				}
+				else
 				{
 					package = JsonConvert.DeserializeObject<ExportPackage>(json);
 				}
-				catch (JsonException)
+
+				if (package == null || (package.Binds == null && package.Settings == null && package.MarketingTemplates == null))
 				{
-					// Старый формат экспорта — просто список биндов, без групп и настроек.
-					// package остаётся null, ниже сработает запасной путь.
+					throw new InvalidOperationException("Файл не похож на экспорт SupporTik.");
 				}
 
-				List<BindKeys> importedBinds = package?.Binds
-					?? JsonConvert.DeserializeObject<List<BindKeys>>(json);
+				if (package.Binds != null)
+					ValidateImportedData(package.Binds, package.Groups);
+				if (package.MarketingTemplates != null)
+					MarketingTemplateService.ValidateImported(package.MarketingTemplates);
 
-				if (importedBinds == null)
+				// Сначала полностью сохраняем проверенный пакет. Живое состояние приложения
+				// меняем только после успешной записи, чтобы ошибка диска не оставила UI и
+				// зарегистрированные хоткеи в полуприменённом состоянии.
+				if (package.Binds != null)
 				{
-					throw new InvalidOperationException("Файл не похож на экспорт SupporTik");
+					_storage.SaveData(package.Binds);
+					if (package.Groups != null)
+						_storage.SaveData(package.Groups, "groups.json");
+
+					_bindKeys = package.Binds;
+					if (package.Groups != null)
+						_groupInfos = package.Groups;
 				}
 
-				_bindKeys = importedBinds;
-				_storage.SaveData(_bindKeys);
+				if (package.MarketingTemplates != null)
+					CompositionRoot.Current.MarketingTemplates.ReplaceAll(package.MarketingTemplates);
 
-				if (package?.Groups != null)
-				{
-					_groupInfos = package.Groups;
-					_storage.SaveData(_groupInfos, "groups.json");
-				}
-
-				if (package?.Settings != null)
+				if (package.Settings != null)
 				{
 					Properties.Settings.Default.StartMinimized = package.Settings.StartMinimized;
 					Properties.Settings.Default.MinimizeToTray = package.Settings.MinimizeToTray;
 					Properties.Settings.Default.SelectedKey = package.Settings.SelectedKey;
 					Properties.Settings.Default.SelectedModifiers = package.Settings.SelectedModifiers;
+
+					// В старом пакетном формате этих полей ещё не было. Не сбрасываем их
+					// значениями по умолчанию при импорте такого файла.
+					if (package.Version >= 2)
+					{
+						Properties.Settings.Default.MarketingMenuKey = package.Settings.MarketingMenuKey;
+						Properties.Settings.Default.MarketingMenuModifiers = package.Settings.MarketingMenuModifiers;
+						Properties.Settings.Default.MarketingMenuFromLeft = package.Settings.MarketingMenuFromLeft;
+						Properties.Settings.Default.IsLightTheme = package.Settings.IsLightTheme;
+						Properties.Settings.Default.FollowSystemTheme = package.Settings.FollowSystemTheme;
+						Properties.Settings.Default.ThemePreferenceInitialized = true;
+						Properties.Settings.Default.RecentMarketingUids = package.Settings.RecentMarketingUids ?? string.Empty;
+					}
 					Properties.Settings.Default.Save();
+
+					if (package.Version >= 2)
+					{
+						new AppSettingsServiceAdapter().SetAutoStart(package.Settings.AutoStartEnabled);
+						var themeService = new ThemeService();
+						if (package.Settings.FollowSystemTheme)
+							themeService.SetFollowSystem(true);
+						else
+						{
+							themeService.SetFollowSystem(false);
+							ThemeService.Apply(package.Settings.IsLightTheme);
+						}
+					}
 				}
 
-				// Перерегистрируем хоткеи под импортированные бинды/настройки
-				RegisterDefaultHotkeys();
+				if (package.Binds != null || package.Settings != null)
+					RegisterDefaultHotkeys();
+
+				var importedSections = new List<string>();
+				if (package.Binds != null) importedSections.Add("бинды");
+				if (package.Settings != null) importedSections.Add("настройки");
+				if (package.MarketingTemplates != null) importedSections.Add("рекламные шаблоны");
 
 				_notifyIcon?.ShowBalloonTip(
 					"Импорт",
-					"Данные успешно импортированы!",
+					$"Импортировано: {string.Join(", ", importedSections)}.",
 					BalloonIcon.None);
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
+				LoggingService.LogError("HotkeyRegistrationService.ImportData", ex);
 				_notifyIcon?.ShowBalloonTip(
 					"Импорт",
 					"Произошла ошибка при импорте!",
 					BalloonIcon.None);
+			}
+		}
+
+		private static void ValidateImportedData(List<BindKeys> binds, List<BindGroupInfo> groups)
+		{
+			if (binds.Any(b => b == null || b.Key == Key.None || string.IsNullOrWhiteSpace(b.Name)))
+			{
+				throw new InvalidOperationException("Экспорт содержит некорректные бинды.");
+			}
+
+			if (groups != null && groups.Any(g => g == null || g.Key == Key.None))
+			{
+				throw new InvalidOperationException("Экспорт содержит некорректные группы.");
 			}
 		}
 
@@ -491,9 +535,6 @@ namespace SupporTik.Services
 
 		public void UnregisterAllOnExit()
 		{
-			_usageFlushTimer.Stop();
-			_usageFlushTimer.Dispose();
-
 			_hotkeyService.UnregisterAll();
 			(_hotkeyService as IDisposable)?.Dispose();
 		}

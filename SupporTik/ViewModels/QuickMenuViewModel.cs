@@ -30,7 +30,7 @@ namespace SupporTik.ViewModels
 		/// <summary>
 		/// Окно ничего не знает, что стоит за каждым пунктом — это может быть вставка
 		/// шаблона, NDA-замена или что угодно ещё; вся эта логика собирается в
-		/// App.BuildQuickMenuEntries и приходит сюда уже готовым списком.
+		/// HotkeyRegistrationService и приходит сюда уже готовым списком.
 		/// </summary>
 		public void SetEntries(string groupTitle, List<QuickMenuEntry> entries)
 		{

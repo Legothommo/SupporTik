@@ -2,10 +2,12 @@ using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SupporTik.Classes;
+using SupporTik.Helpers;
 using SupporTik.Services;
 using SupporTik.ViewModels;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Animation;
@@ -28,6 +30,7 @@ namespace SupporTik.Views
 		private const string DataLensCookieUrl = "https://datalens.yandex-team.ru";
 
 		private const string YandexCookieUrl = "https://yandex.ru";
+		private static readonly TimeSpan AuthorizationNavigationTimeout = TimeSpan.FromMinutes(5);
 
 		// Фиксированная ширина окна — используется и для позиционирования, и для
 		// анимации, чтобы не зависеть от Width, который во время показа окна может
@@ -35,6 +38,7 @@ namespace SupporTik.Views
 		private const double WindowWidth = 500;
 
 		private readonly MarketingWindowViewModel _viewModel;
+		private readonly SemaphoreSlim _authorizationGate = new SemaphoreSlim(1, 1);
 
 		// Сторона, с которой выезжает окно — настраивается в SettingsPage
 		private bool OpenFromLeft => Properties.Settings.Default.MarketingMenuFromLeft;
@@ -63,7 +67,15 @@ namespace SupporTik.Views
 			var notificationService = new NotificationServiceAdapter();
 			var upsaleService = new UpsaleService();
 			var budgetService = new BudgetService();
-			_viewModel = new MarketingWindowViewModel(campaignService, notificationService, upsaleService, budgetService, EnsureDataLensAuthAsync, GetYandexBusinessAuthAsync);
+			var textBuilder = new MarketingOfferTextBuilder(CompositionRoot.Current.MarketingTemplates);
+			_viewModel = new MarketingWindowViewModel(
+				campaignService,
+				notificationService,
+				upsaleService,
+				budgetService,
+				textBuilder,
+				EnsureDataLensAuthAsync,
+				GetYandexBusinessAuthAsync);
 			DataContext = _viewModel;
 
 			// Тикает, пока окно открыто, чтобы "N мин назад" само доезжало без нового
@@ -96,7 +108,7 @@ namespace SupporTik.Views
 
 			if (_dataLensAuthCheckedAt != null)
 			{
-				text += $" · DataLens {FormatAge(DateTime.Now - _dataLensAuthCheckedAt.Value)}";
+				text += $" · Сессия DataLens подтверждена {FormatAge(DateTime.Now - _dataLensAuthCheckedAt.Value)}";
 			}
 
 			_viewModel.SessionStatusText = stale ? $"⚠ {text} — возможно, устарела" : text;
@@ -207,7 +219,9 @@ namespace SupporTik.Views
 		/// нормальная гонка. script должен сам возвращать пустые строки, а не бросать
 		/// исключение, если __INITIAL__ ещё не готов (см. использование ниже).
 		/// </summary>
-		private async Task<JObject> WaitForInitialStateAsync(string script)
+		private async Task<JObject> WaitForInitialStateAsync(
+			string script,
+			CancellationToken cancellationToken)
 		{
 			for (int attempt = 0; attempt < InitialStateMaxAttempts; attempt++)
 			{
@@ -227,7 +241,7 @@ namespace SupporTik.Views
 					}
 				}
 
-				await Task.Delay(InitialStateRetryDelayMs);
+				await Task.Delay(InitialStateRetryDelayMs, cancellationToken);
 			}
 
 			return new JObject();
@@ -264,7 +278,27 @@ namespace SupporTik.Views
 		/// на дашборд и окно логина не покажется вовсе; если нет — ждём редиректа
 		/// на страницу логина и затем перехода обратно после того, как пользователь войдёт.
 		/// </summary>
-		private async Task<(string CookieHeader, string CsrfToken)> EnsureDataLensAuthAsync(bool forceRefresh)
+		private Task<(string CookieHeader, string CsrfToken)> EnsureDataLensAuthAsync(
+			bool forceRefresh,
+			CancellationToken cancellationToken)
+		{
+			return RunAuthorizationExclusiveAsync(
+				() => EnsureDataLensAuthCoreAsync(forceRefresh, cancellationToken),
+				cancellationToken);
+		}
+
+		private void BtnCopySelectedUpsales_Click(object sender, RoutedEventArgs e)
+		{
+			if (!(sender is FrameworkElement button)) return;
+			MarketingTemplateMenu.Open(
+				button,
+				_viewModel.GetCompatibleTemplatesForSelected(),
+				_viewModel.CopySelectedUpsalesWithTemplate);
+		}
+
+		private async Task<(string CookieHeader, string CsrfToken)> EnsureDataLensAuthCoreAsync(
+			bool forceRefresh,
+			CancellationToken cancellationToken)
 		{
 			if (!forceRefresh && _cachedDataLensAuth.HasValue)
 			{
@@ -276,34 +310,18 @@ namespace SupporTik.Views
 			TbLoginStatus.Text = "Проверяем авторизацию в DataLens...";
 			TbLoginStatus.Visibility = Visibility.Visible;
 
-			var tcs = new TaskCompletionSource<bool>();
-
-			void Handler(object s, CoreWebView2NavigationCompletedEventArgs args)
+			try
 			{
-				string currentUrl = webView.CoreWebView2.Source ?? string.Empty;
-				bool isLoginPage = currentUrl.ToLowerInvariant().Contains("passport.yandex");
-
-				if (isLoginPage)
-				{
-					webView.Visibility = Visibility.Visible;
-					TbLoginStatus.Text = "Войдите в аккаунт login@yandex-team.ru в открывшемся окне...";
-					return; // ждём следующей навигации — после того, как пользователь войдёт
-				}
-
-				if (args.IsSuccess)
-				{
-					webView.CoreWebView2.NavigationCompleted -= Handler;
-					tcs.TrySetResult(true);
-				}
+				await NavigateForAuthorizationAsync(
+					DataLensDashboardUrl,
+					"Войдите в аккаунт login@yandex-team.ru в открывшемся окне...",
+					cancellationToken);
 			}
-
-			webView.CoreWebView2.NavigationCompleted += Handler;
-			webView.CoreWebView2.Navigate(DataLensDashboardUrl);
-
-			await tcs.Task;
-
-			webView.Visibility = Visibility.Collapsed;
-			TbLoginStatus.Visibility = Visibility.Collapsed;
+			finally
+			{
+				webView.Visibility = Visibility.Collapsed;
+				TbLoginStatus.Visibility = Visibility.Collapsed;
+			}
 
 			var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(DataLensCookieUrl);
 			string cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
@@ -331,7 +349,18 @@ namespace SupporTik.Views
 		/// истекла — WebView2 общий с DataLens и мог успеть уйти на другой домен), а затем
 		/// достаём значения через ExecuteScriptAsync из уже отрисованной страницы.
 		/// </summary>
-		private async Task<YandexBusinessAuth> GetYandexBusinessAuthAsync(bool forceRefresh)
+		private Task<YandexBusinessAuth> GetYandexBusinessAuthAsync(
+			bool forceRefresh,
+			CancellationToken cancellationToken)
+		{
+			return RunAuthorizationExclusiveAsync(
+				() => GetYandexBusinessAuthCoreAsync(forceRefresh, cancellationToken),
+				cancellationToken);
+		}
+
+		private async Task<YandexBusinessAuth> GetYandexBusinessAuthCoreAsync(
+			bool forceRefresh,
+			CancellationToken cancellationToken)
 		{
 			if (!forceRefresh && _cachedYandexAuth != null)
 			{
@@ -343,34 +372,18 @@ namespace SupporTik.Views
 			TbLoginStatus.Text = "Проверяем авторизацию...";
 			TbLoginStatus.Visibility = Visibility.Visible;
 
-			var tcs = new TaskCompletionSource<bool>();
-
-			void Handler(object s, CoreWebView2NavigationCompletedEventArgs args)
+			try
 			{
-				string currentUrl = webView.CoreWebView2.Source ?? string.Empty;
-				bool isLoginPage = currentUrl.ToLowerInvariant().Contains("passport.yandex");
-
-				if (isLoginPage)
-				{
-					webView.Visibility = Visibility.Visible;
-					TbLoginStatus.Text = "Войдите в аккаунт yndx-login@yandex.ru в открывшемся окне...";
-					return; // ждём следующей навигации — после того, как пользователь войдёт
-				}
-
-				if (args.IsSuccess)
-				{
-					webView.CoreWebView2.NavigationCompleted -= Handler;
-					tcs.TrySetResult(true);
-				}
+				await NavigateForAuthorizationAsync(
+					LoginCheckUrl,
+					"Войдите в аккаунт yndx-login@yandex.ru в открывшемся окне...",
+					cancellationToken);
 			}
-
-			webView.CoreWebView2.NavigationCompleted += Handler;
-			webView.CoreWebView2.Navigate(LoginCheckUrl);
-
-			await tcs.Task;
-
-			webView.Visibility = Visibility.Collapsed;
-			TbLoginStatus.Visibility = Visibility.Collapsed;
+			finally
+			{
+				webView.Visibility = Visibility.Collapsed;
+				TbLoginStatus.Visibility = Visibility.Collapsed;
+			}
 
 			var cookies = await webView.CoreWebView2.CookieManager.GetCookiesAsync(YandexCookieUrl);
 			string cookieHeader = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
@@ -388,7 +401,7 @@ namespace SupporTik.Views
 				"managerUid: (window.__INITIAL__ && window.__INITIAL__.state && window.__INITIAL__.state.config && window.__INITIAL__.state.config.authorization) ? window.__INITIAL__.state.config.authorization.uid : ''" +
 				"})";
 
-			JObject data = await WaitForInitialStateAsync(script);
+			JObject data = await WaitForInitialStateAsync(script, cancellationToken);
 
 			string csrfToken = data.Value<string>("csrfToken") ?? string.Empty;
 			string sessionId = data.Value<string>("sessionId") ?? string.Empty;
@@ -408,6 +421,71 @@ namespace SupporTik.Views
 			}
 
 			return auth;
+		}
+
+		private async Task<T> RunAuthorizationExclusiveAsync<T>(
+			Func<Task<T>> action,
+			CancellationToken cancellationToken)
+		{
+			await _authorizationGate.WaitAsync(cancellationToken);
+			try
+			{
+				return await action();
+			}
+			finally
+			{
+				_authorizationGate.Release();
+			}
+		}
+
+		private async Task NavigateForAuthorizationAsync(
+			string targetUrl,
+			string loginMessage,
+			CancellationToken cancellationToken)
+		{
+			var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+			void Handler(object sender, CoreWebView2NavigationCompletedEventArgs args)
+			{
+				string currentUrl = webView.CoreWebView2.Source ?? string.Empty;
+				if (currentUrl.IndexOf("passport.yandex", StringComparison.OrdinalIgnoreCase) >= 0)
+				{
+					webView.Visibility = Visibility.Visible;
+					TbLoginStatus.Text = loginMessage;
+					return;
+				}
+
+				if (args.IsSuccess)
+				{
+					completion.TrySetResult(true);
+				}
+				else
+				{
+					completion.TrySetException(new InvalidOperationException(
+						$"Не удалось открыть страницу авторизации: {args.WebErrorStatus}."));
+				}
+			}
+
+			webView.CoreWebView2.NavigationCompleted += Handler;
+			try
+			{
+				webView.CoreWebView2.Navigate(targetUrl);
+
+				Task timeout = Task.Delay(AuthorizationNavigationTimeout, cancellationToken);
+				Task finished = await Task.WhenAny(completion.Task, timeout);
+
+				if (finished != completion.Task)
+				{
+					cancellationToken.ThrowIfCancellationRequested();
+					throw new TimeoutException("Истекло время ожидания авторизации Яндекса.");
+				}
+
+				await completion.Task;
+			}
+			finally
+			{
+				webView.CoreWebView2.NavigationCompleted -= Handler;
+			}
 		}
 
 		#endregion
@@ -474,19 +552,28 @@ namespace SupporTik.Views
 		}
 		public async Task ClearAuthorizationAsync()
 		{
-			await webView.EnsureCoreWebView2Async();
+			await _authorizationGate.WaitAsync();
+			try
+			{
+				await webView.EnsureCoreWebView2Async();
 
-			if (webView.CoreWebView2 == null)
-				return;
+				if (webView.CoreWebView2 == null)
+				{
+					return;
+				}
 
-			// Удаляем cookies и данные сайтов из профиля WebView2.
-			await webView.CoreWebView2.Profile.ClearBrowsingDataAsync(
-				CoreWebView2BrowsingDataKinds.Cookies |
-				CoreWebView2BrowsingDataKinds.AllDomStorage);
+				// Удаляем cookies и данные сайтов из профиля WebView2.
+				await webView.CoreWebView2.Profile.ClearBrowsingDataAsync(
+					CoreWebView2BrowsingDataKinds.Cookies |
+					CoreWebView2BrowsingDataKinds.AllDomStorage);
 
-			// Сбрасываем внутренние кэши авторизации окна.
-			_cachedYandexAuth = null;
-			_cachedDataLensAuth = null;
+				_cachedYandexAuth = null;
+				_cachedDataLensAuth = null;
+			}
+			finally
+			{
+				_authorizationGate.Release();
+			}
 		}
 	}
 }

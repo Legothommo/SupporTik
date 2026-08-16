@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SupporTik.Services
@@ -17,6 +18,10 @@ namespace SupporTik.Services
 		/// progress получает текст вида "Апсейлы N/M..." по мере завершения запросов.
 		/// </summary>
 		Task<Dictionary<string, string>> CheckUpsalesAsync(
-			string cookieHeader, string csrfToken, IReadOnlyList<string> campaignIds, IProgress<string> progress);
+			string cookieHeader,
+			string csrfToken,
+			IReadOnlyList<string> campaignIds,
+			IProgress<string> progress,
+			CancellationToken cancellationToken);
 	}
 }

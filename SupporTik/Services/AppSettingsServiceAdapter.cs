@@ -90,7 +90,8 @@ namespace SupporTik.Services
 		public void StartHotkeyCapture(Action<Key, ModifierKeys> onCaptured) => CompositionRoot.Current.HotkeyService.StartCapture(onCaptured);
 		public void CancelHotkeyCapture() => CompositionRoot.Current.HotkeyService.CancelCapture();
 
-		public void ExportData() => CompositionRoot.Current.Hotkeys.ExportData();
+		public void ExportData(bool includeBinds, bool includeSettings, bool includeMarketingTemplates) =>
+			CompositionRoot.Current.Hotkeys.ExportData(includeBinds, includeSettings, includeMarketingTemplates, AutoStartEnabled);
 		public void ImportData() => CompositionRoot.Current.Hotkeys.ImportData();
 
 		public Task ClearAuthorizationAsync()
@@ -110,11 +111,11 @@ namespace SupporTik.Services
 
 			SetAutoStart(false);
 
-			// ThemeService.SetTheme сам приводит в порядок и подписку на системную тему
+			// После сброса снова следуем системной теме — это новое значение по умолчанию.
 			// (Reset() выше не проходит через её API, поэтому живая подписка на
 			// SystemEvents могла бы иначе остаться висеть), и синхронно перерисовывает
-			// окна под новое (дефолтное — тёмное) значение
-			new ThemeService().SetTheme(false);
+			// окна под актуальную тему Windows.
+			new ThemeService().SetFollowSystem(true);
 
 			CompositionRoot.Current.Hotkeys.RegisterDefaultHotkeys();
 

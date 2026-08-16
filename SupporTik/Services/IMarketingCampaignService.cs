@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using SupporTik.Classes;
 
@@ -13,6 +14,10 @@ namespace SupporTik.Services
 		/// отдельного прохода по страницам настроек больше не требуется.
 		/// progress получает текст вида "Страница N..." на время пагинации.
 		/// </summary>
-		Task<List<MarketingItem>> SearchAsync(string uid, YandexBusinessAuth auth, IProgress<string> progress);
+		Task<List<MarketingItem>> SearchAsync(
+			string uid,
+			YandexBusinessAuth auth,
+			IProgress<string> progress,
+			CancellationToken cancellationToken);
 	}
 }

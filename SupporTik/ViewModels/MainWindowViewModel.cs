@@ -64,11 +64,22 @@ namespace SupporTik.ViewModels
 		public MainWindowViewModel(IThemeService themeService)
 		{
 			_themeService = themeService;
+			_themeService.ThemeChanged += ThemeService_ThemeChanged;
 			_isLightTheme = themeService.IsLightTheme;
 			_followSystemTheme = themeService.IsFollowingSystem;
 
 			ToggleMenuCommand = new RelayCommand(() => IsMenuOpen = !IsMenuOpen);
 			CloseMenuCommand = new RelayCommand(() => IsMenuOpen = false);
+		}
+
+		private void ThemeService_ThemeChanged(object sender, System.EventArgs e)
+		{
+			bool actualTheme = _themeService.IsLightTheme;
+			if (_isLightTheme != actualTheme)
+			{
+				_isLightTheme = actualTheme;
+				OnPropertyChanged(nameof(IsLightTheme));
+			}
 		}
 	}
 }

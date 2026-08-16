@@ -62,11 +62,13 @@
     <Compile Include="Classes\BindKeys.cs" />
     <Compile Include="Classes\BulkObservableCollection.cs" />
     <Compile Include="Classes\MarketingItem.cs" />
+	<Compile Include="Classes\MarketingTextTemplate.cs" />
     <Compile Include="Classes\YandexBusinessAuth.cs" />
     <Compile Include="Classes\QuickMenuEntry.cs" />
     <Compile Include="Classes\BindGroupInfo.cs" />
     <Compile Include="Classes\ExportPackage.cs" />
     <Compile Include="Helpers\KeyExtensions.cs" />
+	<Compile Include="Helpers\MarketingTemplateMenu.cs" />
     <Compile Include="CompositionRoot.cs" />
     <Compile Include="Mvvm\ViewModelBase.cs" />
     <Compile Include="Mvvm\RelayCommand.cs" />
@@ -92,6 +94,12 @@
     <Compile Include="Pages\SettingsPage.xaml.cs">
       <DependentUpon>SettingsPage.xaml</DependentUpon>
     </Compile>
+	<Compile Include="Pages\DiagnosticsPage.xaml.cs">
+	  <DependentUpon>DiagnosticsPage.xaml</DependentUpon>
+	</Compile>
+	<Compile Include="Pages\MarketingTemplatesPage.xaml.cs">
+	  <DependentUpon>MarketingTemplatesPage.xaml</DependentUpon>
+	</Compile>
     <Compile Include="Styles\ContextMenu.xaml.cs">
       <DependentUpon>ContextMenu.xaml</DependentUpon>
     </Compile>
@@ -102,6 +110,7 @@
       <DependentUpon>QuickTextWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="Services\HotkeyService.cs" />
+	<Compile Include="Services\HttpRetryPolicy.cs" />
     <Compile Include="Services\IHotkeyService.cs" />
     <Compile Include="Services\IBindsService.cs" />
     <Compile Include="Services\BindsServiceAdapter.cs" />
@@ -110,6 +119,8 @@
     <Compile Include="Services\IMainWindowProvider.cs" />
     <Compile Include="Services\IMarketingCampaignService.cs" />
     <Compile Include="Services\MarketingCampaignService.cs" />
+    <Compile Include="Services\MarketingTemplateService.cs" />
+	<Compile Include="Services\MarketingOfferTextBuilder.cs" />
     <Compile Include="Services\INotificationService.cs" />
     <Compile Include="Services\IUpsaleService.cs" />
     <Compile Include="Services\UpsaleService.cs" />
@@ -129,6 +140,7 @@
     <Compile Include="ViewModels\Binds\BindCreateViewModel.cs" />
     <Compile Include="ViewModels\AboutPageViewModel.cs" />
     <Compile Include="ViewModels\SettingsPageViewModel.cs" />
+	<Compile Include="ViewModels\DiagnosticsPageViewModel.cs" />
     <Compile Include="ViewModels\MainWindowViewModel.cs" />
     <Compile Include="ViewModels\QuickMenuEntryViewModel.cs" />
     <Compile Include="ViewModels\QuickMenuViewModel.cs" />
@@ -136,6 +148,7 @@
     <Compile Include="ViewModels\MarketingItemViewModel.cs" />
     <Compile Include="ViewModels\FilterOption.cs" />
     <Compile Include="ViewModels\MarketingWindowViewModel.cs" />
+	<Compile Include="ViewModels\MarketingTemplatesPageViewModel.cs" />
     <Compile Include="Converters\MarketingStatusConverters.cs" />
     <Compile Include="Converters\InverseBooleanToVisibilityConverter.cs" />
     <Compile Include="Services\StorageService.cs" />
@@ -196,6 +209,14 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+	<Page Include="Pages\DiagnosticsPage.xaml">
+	  <SubType>Designer</SubType>
+	  <Generator>MSBuild:Compile</Generator>
+	</Page>
+	<Page Include="Pages\MarketingTemplatesPage.xaml">
+	  <SubType>Designer</SubType>
+	  <Generator>MSBuild:Compile</Generator>
+	</Page>
     <Page Include="Views\MarketingWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>

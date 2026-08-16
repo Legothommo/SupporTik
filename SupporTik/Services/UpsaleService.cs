@@ -15,11 +15,26 @@ namespace SupporTik.Services
 {
 	public class UpsaleService : IUpsaleService
 	{
+		private sealed class UpsaleCacheEntry
+		{
+			public string Value { get; set; }
+			public DateTime StoredAt { get; set; }
+		}
+
+		private const int MaxCachedUpsales = 1000;
+		private static readonly TimeSpan CacheLifetime = TimeSpan.FromMinutes(3);
+		private readonly object _cacheLock = new object();
+		private readonly Dictionary<string, UpsaleCacheEntry> _cache =
+			new Dictionary<string, UpsaleCacheEntry>();
+		private string _cacheSession;
+
 		// id виджета с таблицей апсейлов на дашборде — если дашборд поменяется, нужно
 		// заново найти id через Network → Payload после клика "Применить" в браузере
 		private const string ChartId = "fhwtppiuuowk0";
 		private const string Url = "https://datalens.yandex-team.ru/api/run";
 		private const string DashboardReferer = "https://datalens.yandex-team.ru/qniendwn7xvwg-apseyl-po-nomeram-rk?tab=OW";
+		private static readonly HttpClient HttpClient = new HttpClient(
+			new HttpClientHandler { UseCookies = false });
 
 		// Раньше кампании проверялись строго по очереди (одна за другой) — на десятках
 		// кампаний это была основная задержка "Проверить апсейлы". Ограничение вместо
@@ -27,38 +42,42 @@ namespace SupporTik.Services
 		private const int MaxConcurrentRequests = 5;
 
 		public async Task<Dictionary<string, string>> CheckUpsalesAsync(
-			string cookieHeader, string csrfToken, IReadOnlyList<string> campaignIds, IProgress<string> progress)
+			string cookieHeader,
+			string csrfToken,
+			IReadOnlyList<string> campaignIds,
+			IProgress<string> progress,
+			CancellationToken cancellationToken)
 		{
 			var results = new ConcurrentDictionary<string, string>();
 
-			var handler = new HttpClientHandler
-			{
-				UseCookies = false // куки передаём вручную через заголовок
-			};
-
-			using (var client = new HttpClient(handler))
 			using (var throttle = new SemaphoreSlim(MaxConcurrentRequests))
 			{
-				client.DefaultRequestHeaders.Add("Cookie", cookieHeader);
-				client.DefaultRequestHeaders.Add("X-CSRF-Token", csrfToken);
-				client.DefaultRequestHeaders.Add("Referer", DashboardReferer);
-				client.DefaultRequestHeaders.Add("X-Dash-Info", "dashId=qniendwn7xvwg&dashTabId=OW");
-				client.DefaultRequestHeaders.Add("X-DL-Display-Mode", "basic");
-				client.DefaultRequestHeaders.Add("X-DL-TenantId", "common");
-				client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
 				int completed = 0;
 
 				var tasks = campaignIds.Select(async campaignId =>
 				{
-					await throttle.WaitAsync();
+					await throttle.WaitAsync(cancellationToken);
 					try
 					{
-						results[campaignId] = await GetUpsaleAsync(client, campaignId);
+						string value = TryGetCachedUpsale(cookieHeader, csrfToken, campaignId);
+						if (value == null)
+						{
+							value = await GetUpsaleAsync(cookieHeader, csrfToken, campaignId, cancellationToken);
+							if (!string.IsNullOrEmpty(value) && value != "Ошибка")
+							{
+								StoreUpsale(cookieHeader, csrfToken, campaignId, value);
+							}
+						}
+
+						results[campaignId] = value;
+					}
+					catch (OperationCanceledException)
+					{
+						throw;
 					}
 					catch (Exception ex)
 					{
-						Debug.WriteLine($"campaign_id={campaignId}: ошибка проверки апсейла — {ex.Message}");
+						LoggingService.LogError($"UpsaleService campaign_id={campaignId}", ex);
 						results[campaignId] = "Ошибка";
 					}
 					finally
@@ -75,7 +94,65 @@ namespace SupporTik.Services
 			return new Dictionary<string, string>(results);
 		}
 
-		private static async Task<string> GetUpsaleAsync(HttpClient client, string campaignId)
+		private string TryGetCachedUpsale(
+			string cookieHeader,
+			string csrfToken,
+			string campaignId)
+		{
+			lock (_cacheLock)
+			{
+				ResetCacheForNewSession(cookieHeader, csrfToken);
+				if (_cache.TryGetValue(campaignId, out UpsaleCacheEntry entry))
+				{
+					if (DateTime.UtcNow - entry.StoredAt <= CacheLifetime)
+					{
+						return entry.Value;
+					}
+
+					_cache.Remove(campaignId);
+				}
+			}
+
+			return null;
+		}
+
+		private void StoreUpsale(
+			string cookieHeader,
+			string csrfToken,
+			string campaignId,
+			string value)
+		{
+			lock (_cacheLock)
+			{
+				ResetCacheForNewSession(cookieHeader, csrfToken);
+				if (_cache.Count >= MaxCachedUpsales)
+				{
+					_cache.Clear();
+				}
+
+				_cache[campaignId] = new UpsaleCacheEntry
+				{
+					Value = value,
+					StoredAt = DateTime.UtcNow
+				};
+			}
+		}
+
+		private void ResetCacheForNewSession(string cookieHeader, string csrfToken)
+		{
+			string session = cookieHeader + "\n" + csrfToken;
+			if (!string.Equals(_cacheSession, session, StringComparison.Ordinal))
+			{
+				_cache.Clear();
+				_cacheSession = session;
+			}
+		}
+
+		private static async Task<string> GetUpsaleAsync(
+			string cookieHeader,
+			string csrfToken,
+			string campaignId,
+			CancellationToken cancellationToken)
 		{
 			// ВАЖНО: campaign_ggio, а не campaign_id — так работает на реальном дашборде,
 			// хотя по названию поля логичнее выглядело бы наоборот
@@ -95,18 +172,31 @@ namespace SupporTik.Services
 			};
 
 			string json = JsonConvert.SerializeObject(payload);
-			var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-			var response = await client.PostAsync(Url, content);
-
-			if (!response.IsSuccessStatusCode)
+			using (var response = await HttpRetryPolicy.SendAsync(
+				HttpClient,
+				() =>
+				{
+					var request = new HttpRequestMessage(HttpMethod.Post, Url);
+					request.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
+					request.Headers.TryAddWithoutValidation("X-CSRF-Token", csrfToken);
+					request.Headers.Referrer = new Uri(DashboardReferer);
+					request.Headers.TryAddWithoutValidation("X-Dash-Info", "dashId=qniendwn7xvwg&dashTabId=OW");
+					request.Headers.TryAddWithoutValidation("X-DL-Display-Mode", "basic");
+					request.Headers.TryAddWithoutValidation("X-DL-TenantId", "common");
+					request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+					request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+					return request;
+				},
+				cancellationToken))
 			{
-				string errorBody = await response.Content.ReadAsStringAsync();
-				throw new HttpRequestException($"Status {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
-			}
+				HttpRetryPolicy.EnsureSuccess(
+					response,
+					"Не удалось проверить предложение для рекламной кампании.",
+					"UpsaleService.GetUpsaleAsync");
 
-			string body = await response.Content.ReadAsStringAsync();
-			return ParseUpsaleValue(body);
+				string body = await response.Content.ReadAsStringAsync();
+				return ParseUpsaleValue(body);
+			}
 		}
 
 		private static string ParseUpsaleValue(string json)

@@ -30,7 +30,7 @@ namespace SupporTik.Services
 		void StartHotkeyCapture(Action<Key, ModifierKeys> onCaptured);
 		void CancelHotkeyCapture();
 
-		void ExportData();
+		void ExportData(bool includeBinds, bool includeSettings, bool includeMarketingTemplates);
 		void ImportData();
 
 		Task ClearAuthorizationAsync();

@@ -49,7 +49,7 @@ namespace SupporTik.Services
 				string tagName = release.Value<string>("tag_name") ?? string.Empty;
 				string releaseUrl = release.Value<string>("html_url") ?? string.Empty;
 
-				// Теги в этом репозитории без префикса "v" ("2.5.0"), но на случай,
+				// Теги в этом репозитории без префикса "v" ("2.6.0"), но на случай,
 				// если он когда-нибудь появится — срезаем его перед парсингом
 				string versionText = tagName.TrimStart('v', 'V');
 

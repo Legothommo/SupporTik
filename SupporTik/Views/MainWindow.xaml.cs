@@ -156,6 +156,18 @@ namespace SupporTik
 			_viewModel.CloseMenuCommand.Execute(null);
 		}
 
+		private void GoToMarketingTemplates(object sender, RoutedEventArgs e)
+		{
+			MainFrame.Navigate(new MarketingTemplatesPage());
+			_viewModel.CloseMenuCommand.Execute(null);
+		}
+
+		private void GoToDiagnostics(object sender, RoutedEventArgs e)
+		{
+			MainFrame.Navigate(new DiagnosticsPage());
+			_viewModel.CloseMenuCommand.Execute(null);
+		}
+
 		private void GoToAbout(object sender, RoutedEventArgs e)
 		{
 			MainFrame.Navigate(new AboutPage());

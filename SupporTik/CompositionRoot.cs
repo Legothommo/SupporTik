@@ -17,6 +17,7 @@ namespace SupporTik
 		public ITextPasteService PasteService { get; }
 		public IHotkeyService HotkeyService { get; }
 		public StorageService Storage { get; }
+		public MarketingTemplateService MarketingTemplates { get; }
 		public QuickTextWindow QuickMenu { get; }
 		public HotkeyRegistrationService Hotkeys { get; }
 
@@ -27,6 +28,7 @@ namespace SupporTik
 			PasteService = new TextPasteService();
 			HotkeyService = new HotkeyService(PasteService);
 			Storage = new StorageService();
+			MarketingTemplates = new MarketingTemplateService(Storage);
 			QuickMenu = new QuickTextWindow();
 
 			Hotkeys = new HotkeyRegistrationService(Storage, HotkeyService, PasteService, QuickMenu, NotifyIcon);
@@ -39,8 +41,19 @@ namespace SupporTik
 
 		public void Shutdown()
 		{
-			Hotkeys.SaveOnExit();
-			Hotkeys.UnregisterAllOnExit();
+			try
+			{
+				Hotkeys.SaveOnExit();
+			}
+			catch
+			{
+				// StorageService уже записал подробности ошибки в лог; завершение работы
+				// всё равно должно снять системный хук и освободить его ресурсы.
+			}
+			finally
+			{
+				Hotkeys.UnregisterAllOnExit();
+			}
 		}
 	}
 }

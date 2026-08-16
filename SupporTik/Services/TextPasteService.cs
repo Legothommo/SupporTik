@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using WindowsInput;
 using WindowsInput.Native;
@@ -9,6 +10,8 @@ namespace SupporTik.Services
 {
 	public class TextPasteService : ITextPasteService
 	{
+		private readonly SemaphoreSlim _clipboardGate = new SemaphoreSlim(1, 1);
+
 		public bool IsPaused { get; set; } = false;
 
 		public void Start() => IsPaused = false;
@@ -70,6 +73,26 @@ namespace SupporTik.Services
 			return (false, default);
 		}
 
+		private static IDataObject CloneClipboardData(IDataObject source)
+		{
+			if (source == null)
+			{
+				return null;
+			}
+
+			var copy = new DataObject();
+			foreach (string format in source.GetFormats(autoConvert: false))
+			{
+				object data = source.GetData(format, autoConvert: false);
+				if (data != null)
+				{
+					copy.SetData(format, data, autoConvert: false);
+				}
+			}
+
+			return copy;
+		}
+
 		/// <summary>
 		/// Опрашивает буфер обмена короткими интервалами, пока isReady не увидит нужное
 		/// содержимое (до maxAttempts раз с паузой delayMs), вместо того чтобы один раз
@@ -98,6 +121,19 @@ namespace SupporTik.Services
 		#region Вставка текста
 
 		public async Task PasteText(string text)
+		{
+			await _clipboardGate.WaitAsync();
+			try
+			{
+				await PasteTextCoreAsync(text);
+			}
+			finally
+			{
+				_clipboardGate.Release();
+			}
+		}
+
+		private async Task PasteTextCoreAsync(string text)
 		{
 			if (string.IsNullOrEmpty(text) || IsPaused)
 			{
@@ -140,13 +176,33 @@ namespace SupporTik.Services
 
 		public async Task ReplaceSelectionInExternalApp()
 		{
+			await _clipboardGate.WaitAsync();
+			try
+			{
+				await ReplaceSelectionCoreAsync();
+			}
+			finally
+			{
+				_clipboardGate.Release();
+			}
+		}
+
+		private async Task ReplaceSelectionCoreAsync()
+		{
 			if (IsPaused)
 			{
 				return;
 			}
 
-			// 1. Сохраняем предыдущее содержимое буфера обмена
-			var (_, previousClipboard) = await TryClipboardAsync(() => Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty);
+			// Клонируем все форматы до очистки: в буфере может быть не только текст,
+			// но и изображение, список файлов или пользовательский формат приложения.
+			var (clipboardCaptured, previousClipboard) = await TryClipboardAsync(
+				() => CloneClipboardData(Clipboard.GetDataObject()));
+
+			if (!clipboardCaptured)
+			{
+				return;
+			}
 
 			var simulator = new InputSimulator();
 
@@ -187,11 +243,19 @@ namespace SupporTik.Services
 			}
 			finally
 			{
-				// 5. Возвращаем исходное значение в буфер обмена
-				if (!string.IsNullOrEmpty(previousClipboard))
+				// Возвращаем исходное состояние, включая нетекстовые форматы. Если буфер
+				// изначально был пуст, он снова должен стать пустым, а не остаться со звёздочками.
+				await TryClipboardAsync(() =>
 				{
-					await TryClipboardAsync(() => Clipboard.SetText(previousClipboard));
-				}
+					if (previousClipboard == null || previousClipboard.GetFormats(false).Length == 0)
+					{
+						Clipboard.Clear();
+					}
+					else
+					{
+						Clipboard.SetDataObject(previousClipboard, copy: true);
+					}
+				});
 			}
 		}
 

@@ -11,6 +11,7 @@ namespace SupporTik.Services
 		private const string DefaultFileName = "keybinds.json";
 
 		private readonly string _folderPath;
+		public string DataDirectory => _folderPath;
 
 		public StorageService()
 		{
@@ -21,6 +22,7 @@ namespace SupporTik.Services
 
 		public void SaveData<T>(List<T> data, string fileName = DefaultFileName)
 		{
+			string tempPath = null;
 			try
 			{
 				if (!Directory.Exists(_folderPath))
@@ -29,7 +31,7 @@ namespace SupporTik.Services
 				}
 
 				string filePath = Path.Combine(_folderPath, fileName);
-				string tempPath = filePath + ".tmp";
+				tempPath = filePath + ".tmp";
 				string backupPath = filePath + ".bak";
 
 				string jsonString = JsonConvert.SerializeObject(data, Formatting.Indented);
@@ -51,6 +53,20 @@ namespace SupporTik.Services
 			catch (Exception ex)
 			{
 				LoggingService.LogError($"StorageService.SaveData({fileName})", ex);
+
+				try
+				{
+					if (!string.IsNullOrEmpty(tempPath) && File.Exists(tempPath))
+					{
+						File.Delete(tempPath);
+					}
+				}
+				catch (Exception cleanupError)
+				{
+					LoggingService.LogError($"StorageService.SaveData({fileName}): cleanup", cleanupError);
+				}
+
+				throw;
 			}
 		}
 
@@ -73,6 +89,11 @@ namespace SupporTik.Services
 			{
 				LoggingService.LogError($"StorageService.LoadData({fileName}): восстановлено из {backupPath}", primaryError);
 				return data;
+			}
+
+			if (primaryError != null)
+			{
+				LoggingService.LogError($"StorageService.LoadData({fileName}): основной файл и резервная копия недоступны", primaryError);
 			}
 
 			return new List<T>();

@@ -19,6 +19,8 @@ namespace SupporTik.Services
 
 		private static readonly object _writeLock = new object();
 
+		public static string LogDirectory => _logDirectory;
+
 		public static void LogError(string context, Exception ex)
 		{
 			try

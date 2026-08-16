@@ -1,0 +1,30 @@
+<Page x:Class="SupporTik.Pages.DiagnosticsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Background="{DynamicResource ApplicationBackgroundBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28" MaxWidth="900" HorizontalAlignment="Left">
+            <TextBlock Text="Диагностика" FontSize="26" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <TextBlock Text="Здесь нет cookie, CSRF-токенов или других данных авторизации. Информацию можно безопасно приложить к сообщению об ошибке."
+                       TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Margin="0,5,0,18"/>
+
+            <ui:Card Margin="0,0,0,14">
+                <TextBox Text="{Binding DiagnosticInfo, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                         TextWrapping="NoWrap" MinWidth="650" MinHeight="230"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+            </ui:Card>
+
+            <WrapPanel Margin="0,0,0,18">
+                <ui:Button Content="Обновить" Command="{Binding RefreshCommand}" Margin="0,0,8,8"/>
+                <ui:Button Content="Скопировать" Command="{Binding CopyCommand}" Appearance="Primary" Margin="0,0,8,8"/>
+                <ui:Button Content="Открыть данные" Command="{Binding OpenDataDirectoryCommand}" Margin="0,0,8,8"/>
+                <ui:Button Content="Открыть журнал" Command="{Binding OpenLogDirectoryCommand}" Margin="0,0,8,8"/>
+            </WrapPanel>
+
+            <TextBlock Text="Если приложение ведёт себя странно, сначала обновите сведения, затем скопируйте их. Подробности исключений находятся в журнале; он хранится 14 дней."
+                       TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

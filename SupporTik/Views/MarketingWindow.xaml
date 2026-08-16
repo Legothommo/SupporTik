@@ -101,21 +101,33 @@
                       Margin="0,0,0,10"/>
 
         <!-- 4. Поиск по UID — появляется после успешной авторизации -->
-        <StackPanel x:Name="sp_search"
-                    Grid.Row="3"
-                    Orientation="Horizontal"
-                    Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
-                    IsEnabled="{Binding IsNotSearching}"
-                    Margin="0,0,0,10">
+        <Grid x:Name="sp_search"
+              Grid.Row="3"
+              Visibility="{Binding IsSearchUiVisible, Converter={StaticResource BoolToVis}}"
+              Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
             <ui:TextBox x:Name="UidTextBox"
-                        Width="140"
+                        Grid.Column="0"
                         PlaceholderText="UID пользователя"
                         Text="{Binding Uid, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        IsEnabled="{Binding IsNotSearching}"
                         Margin="0,0,8,0"/>
             <ui:Button x:Name="BtnRecentUids"
+                       Grid.Column="1"
                        Icon="{ui:SymbolIcon History24}"
                        Appearance="Secondary"
                        ToolTip="Недавние UID"
+                       IsEnabled="{Binding IsNotSearching}"
                        Margin="0,0,8,0"
                        Click="BtnRecentUids_Click"/>
 
@@ -144,22 +156,66 @@
                 </Border>
             </Popup>
             <ui:Button x:Name="SearchButton"
-                       Content="{Binding SearchButtonLabel}"
-                       Icon="{ui:SymbolIcon Search24}"
+                       Grid.Column="2"
                        Appearance="Primary"
+                       IsEnabled="{Binding IsNotSearching}"
                        Margin="0,0,8,0"
-                       Command="{Binding SearchCommand}"/>
-            <ui:ProgressRing Width="18"
+                       HorizontalAlignment="Stretch"
+                       Command="{Binding SearchCommand}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Grid.Column="0" Symbol="Search24" Margin="0,0,6,0">
+                        <ui:SymbolIcon.Style>
+                            <Style TargetType="{x:Type ui:SymbolIcon}">
+                                <Setter Property="Foreground"
+                                        Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSearching}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ui:SymbolIcon.Style>
+                    </ui:SymbolIcon>
+                    <TextBlock Grid.Column="1" Text="{Binding SearchButtonLabel}"
+                               TextTrimming="CharacterEllipsis" TextWrapping="NoWrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground"
+                                        Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type ui:Button}}}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSearching}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </ui:Button>
+            <ui:ProgressRing Grid.Column="3"
+                              Width="18"
                               Height="18"
                               IsIndeterminate="True"
                               VerticalAlignment="Center"
+                              Margin="0,0,8,0"
                               Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
-            <ui:TextBlock Text="Ничего не найдёно....."
+            <ui:Button Grid.Column="4"
+                       Content="Отменить"
+                       Appearance="Secondary"
+                       Command="{Binding CancelOperationCommand}"
+                       Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}"/>
+            <ui:TextBlock Grid.Row="1"
+                          Grid.ColumnSpan="5"
+                          Text="Ничего не найдено"
                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                           FontSize="12"
-                          VerticalAlignment="Center"
+                          Margin="0,6,0,0"
                           Visibility="{Binding NothingToSearch, Converter={StaticResource BoolToVis}}"/>
-        </StackPanel>
+        </Grid>
 
         <CheckBox x:Name="ChkLazyUpsaleCheck"
                   Grid.Row="4"
@@ -316,11 +372,15 @@
                        Margin="0,0,0,8"
                        Command="{Binding CheckUpsalesCommand}"/>
             <ui:Button x:Name="BtnCopySelectedUpsales"
-                       Content="Скопировать тексты апсейлов"
+                       Content="Скопировать общее предложение"
                        Icon="{ui:SymbolIcon Copy24}"
                        Appearance="Secondary"
                        HorizontalAlignment="Stretch"
-                       Command="{Binding CopySelectedUpsalesCommand}"/>
+                       Click="BtnCopySelectedUpsales_Click"/>
+            <TextBlock Text="{Binding UpsaleResultSummary}"
+                       Visibility="{Binding HasUpsaleResultSummary, Converter={StaticResource BoolToVis}}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       TextAlignment="Center" FontSize="11" Margin="0,8,0,0"/>
         </StackPanel>
 
         <!-- 7. Результаты парсинга — карточки вместо таблицы, так читаемее -->

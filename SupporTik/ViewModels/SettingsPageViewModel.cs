@@ -81,6 +81,27 @@ namespace SupporTik.ViewModels
 			set => SetProperty(ref _checkUpdatesLabel, value);
 		}
 
+		private bool _exportBinds = true;
+		public bool ExportBinds
+		{
+			get => _exportBinds;
+			set => SetProperty(ref _exportBinds, value);
+		}
+
+		private bool _exportSettings = true;
+		public bool ExportSettings
+		{
+			get => _exportSettings;
+			set => SetProperty(ref _exportSettings, value);
+		}
+
+		private bool _exportMarketingTemplates = true;
+		public bool ExportMarketingTemplates
+		{
+			get => _exportMarketingTemplates;
+			set => SetProperty(ref _exportMarketingTemplates, value);
+		}
+
 		public ICommand SaveCommand { get; }
 		public ICommand ExportCommand { get; }
 		public ICommand ImportCommand { get; }
@@ -94,7 +115,7 @@ namespace SupporTik.ViewModels
 			_updateCheckService = new UpdateCheckService();
 
 			SaveCommand = new RelayCommand(Save);
-			ExportCommand = new RelayCommand(() => _settings.ExportData());
+			ExportCommand = new RelayCommand(ExportData);
 			ImportCommand = new RelayCommand(() =>
 			{
 				_settings.ImportData();
@@ -106,6 +127,17 @@ namespace SupporTik.ViewModels
 			ResetCommand = new RelayCommand(ResetToDefaults);
 
 			LoadAll();
+		}
+
+		private void ExportData()
+		{
+			if (!ExportBinds && !ExportSettings && !ExportMarketingTemplates)
+			{
+				MessageBox.Show("Выберите хотя бы один раздел для экспорта.", "Экспорт", MessageBoxButton.OK, MessageBoxImage.Information);
+				return;
+			}
+
+			_settings.ExportData(ExportBinds, ExportSettings, ExportMarketingTemplates);
 		}
 
 		private void ResetToDefaults()

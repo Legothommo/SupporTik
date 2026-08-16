@@ -9,9 +9,11 @@ namespace SupporTik.Classes
 	/// </summary>
 	public class ExportPackage
 	{
+		public int Version { get; set; }
 		public List<BindKeys> Binds { get; set; }
 		public List<BindGroupInfo> Groups { get; set; }
 		public ExportSettings Settings { get; set; }
+		public List<MarketingTextTemplate> MarketingTemplates { get; set; }
 	}
 
 	public class ExportSettings
@@ -20,5 +22,12 @@ namespace SupporTik.Classes
 		public bool MinimizeToTray { get; set; }
 		public int SelectedKey { get; set; }
 		public int SelectedModifiers { get; set; }
+		public int MarketingMenuKey { get; set; }
+		public int MarketingMenuModifiers { get; set; }
+		public bool MarketingMenuFromLeft { get; set; }
+		public bool IsLightTheme { get; set; }
+		public bool FollowSystemTheme { get; set; }
+		public bool AutoStartEnabled { get; set; }
+		public string RecentMarketingUids { get; set; }
 	}
 }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Documents;
@@ -14,6 +15,8 @@ namespace SupporTik.ViewModels
 	{
 		private readonly MarketingItem _item;
 		private readonly INotificationService _notificationService;
+		private readonly MarketingOfferTextBuilder _textBuilder;
+		internal MarketingItem Model => _item;
 
 		/// <summary>Сырой пермалинк (без плейсхолдера "—") — используется при копировании, не для отображения.</summary>
 		public string RawPermalink => _item.Permalink;
@@ -104,21 +107,26 @@ namespace SupporTik.ViewModels
 
 		public ICommand OpenCommand { get; }
 		public ICommand CopyPermalinkCommand { get; }
-		public ICommand CopyUpsaleCommand { get; }
+		public ICommand CopyWithTemplateCommand { get; }
 
-		public MarketingItemViewModel(MarketingItem item, INotificationService notificationService)
+		public MarketingItemViewModel(
+			MarketingItem item,
+			INotificationService notificationService,
+			MarketingOfferTextBuilder textBuilder)
 		{
 			_item = item;
 			_notificationService = notificationService;
+			_textBuilder = textBuilder;
 
 			OpenCommand = new RelayCommand(Open, () => CanOpen);
 			CopyPermalinkCommand = new RelayCommand(CopyPermalink, () => !string.IsNullOrEmpty(RawPermalink));
-			CopyUpsaleCommand = new RelayCommand(CopyUpsale);
+			CopyWithTemplateCommand = new RelayCommand(CopyWithTemplate);
 		}
 
-		private void CopyUpsale()
+		private void CopyWithTemplate(object parameter)
 		{
-			Clipboard.SetText(BuildUpsaleText());
+			if (!(parameter is MarketingTextTemplate template)) return;
+			Clipboard.SetText(BuildUpsaleText(template));
 
 			_notificationService.ShowBalloon(
 				"Скопировано",
@@ -126,57 +134,22 @@ namespace SupporTik.ViewModels
 				false);
 		}
 
-		/// <summary>
-		/// Собирает текст предложения по этой карточке — тот же шаблон, что и кнопка
-		/// копирования на карточке (CopyUpsaleCommand), но без побочных эффектов
-		/// (буфер/уведомление), чтобы им мог переиспользоваться при массовом копировании
-		/// (см. MarketingWindowViewModel.CopySelectedUpsalesCommand).
-		/// </summary>
-		public string BuildUpsaleText()
+		public string BuildUpsaleText(MarketingTextTemplate template)
 		{
-			var text = "";
-			string url = _item.IsMulti
-			? $"https://yandex.ru/business/subscription/campaign/{_item.Permalink}?upsale_budget={_item.UpsaleValue}&show_popup=upsale"
-			: $"https://yandex.ru/business/priority/campaign/{_item.Permalink}/main?show_popup=upsale&upsale_budget={_item.UpsaleValue}";
-			if (Role == "Владелец")
+			return _textBuilder.BuildSingle(_item, template);
+		}
+
+		public IReadOnlyList<MarketingTextTemplate> GetCompatibleTemplates()
+		{
+			IReadOnlyList<MarketingTextTemplate> templates = _textBuilder.GetTemplatesForSingle(_item);
+			if (templates.Count == 0)
 			{
-				if (UpsaleValue.Contains("Продление"))
-				{
-					string[] parts = UpsaleValue.Split(' ');
-					int days = int.Parse(parts[1]);
-
-					text = $"Видим, что подписка № {_item.Permalink} скоро завершится. Предлагаем продлить её, чтобы не прерывать показы, сохранить результаты и привлечь новую аудиторию.\r\n\r\n" +
-						$"Продление на {days} дней составит {_item.AmountUpsale} ₽ и принесёт до {_item.Prediction} потенциальных клиентов в месяц.\r\n\r\n";
-					if (days == 90) text += $"Если планируете продвижение надолго, сроки на 180 или 360 дней принесут выгоду — экономию до 25%. Отметим, что чем дольше ваш бизнес на виду, тем надёжнее поток клиентов.";
-					if (days == 180) text += $"Если планируете продвижение надолго, срок на 360 дней принесёт выгоду — экономию 25%. Отметим, что чем дольше ваш бизнес на виду, тем надёжнее поток клиентов";
-				}
-				if (int.TryParse(UpsaleValue, out int i))
-				{
-					text = $"Вижу, что у вашей кампании хорошие показатели. Их можно улучшить с помощью увеличения бюджета.\r\n\r\n" +
-						$"Как это работает: алгоритм показа объявлений выбирает площадки в пределах бюджета. Если его увеличить, алгоритм получит новые возможности, чтобы привлекать больше потенциальных клиентов.\r\n\r\n" +
-						$"Подробности предложения: [{url}]({url})";
-				}
+				_notificationService.ShowBalloon(
+					"Шаблоны",
+					"Для этой кампании нет подходящих шаблонов.",
+					isWarning: true);
 			}
-			else
-			{
-				if (UpsaleValue.Contains("Продление"))
-				{
-					string[] parts = UpsaleValue.Split(' ');
-					int days = int.Parse(parts[1]);
-
-					text = $"Мы заметили, что кампания по продвижению № {_item.Permalink} скоро завершится. Продлите её, чтобы не прерывать показы.\r\n\r\n" +
-						$"Подробности отправим на почту владельца кампании";
-				}
-				if (int.TryParse(UpsaleValue, out int i))
-				{
-					text = $"Вижу, что у вашей кампании хорошие показатели. Их можно улучшить с помощью увеличения бюджета.\r\n\r\n" +
-						$"Как это работает: алгоритм показа объявлений выбирает площадки в пределах бюджета. Если его увеличить, алгоритм получит новые возможности, чтобы привлекать больше потенциальных клиентов.\r\n\r\n" +
-						$"Подробности предложения: [{url}]({url})\r\n\r\n" +
-						$"Отправим письмо с подробностями на почту владельца кампании. Предложение действует 7 дней";
-				}
-			}
-
-			return text;
+			return templates;
 		}
 
 		private void Open()

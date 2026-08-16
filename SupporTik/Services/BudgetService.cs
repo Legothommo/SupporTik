@@ -7,12 +7,38 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SupporTik.Services
 {
 	public class BudgetService : IBudgetService
 	{
+		private sealed class CampaignInfo
+		{
+			public string CsrfToken { get; set; }
+			public string SessionId { get; set; }
+			public string Branding { get; set; }
+			public bool IsMulti { get; set; }
+			public bool HasBudgetIncreaseButton { get; set; }
+		}
+
+		private sealed class CampaignInfoCacheEntry
+		{
+			public CampaignInfo Value { get; set; }
+			public DateTime StoredAt { get; set; }
+		}
+
+		private const int MaxCachedCampaigns = 500;
+		private static readonly TimeSpan CacheLifetime = TimeSpan.FromMinutes(5);
+		private readonly object _cacheLock = new object();
+		private readonly Dictionary<string, CampaignInfoCacheEntry> _campaignInfoCache =
+			new Dictionary<string, CampaignInfoCacheEntry>();
+		private string _cacheCookieHeader;
+
+		private static readonly HttpClient HttpClient = new HttpClient(
+			new HttpClientHandler { UseCookies = false });
+
 		private const string CampaignPageUrlTemplate =
 			"https://yandex.ru/business/subscription/campaign/{0}";
 
@@ -44,19 +70,14 @@ namespace SupporTik.Services
 		/// Рассчитывает сумму продления и параллельно получает
 		/// дополнительные флаги кампании.
 		///
-		/// result[0] = сумма продления
-		/// result[1] = прогноз
-		/// result[2] = IsMulti
-		/// result[3] = HasBudgetIncreaseButton
 		/// </summary>
-		public async Task<Dictionary<int, string>> CalculateRenewalAmountAsync(
+		public async Task<RenewalCalculationResult> CalculateRenewalAmountAsync(
 			string companyPermalink,
 			string campaignId,
 			string cookieHeader,
-			int durationDays)
+			int durationDays,
+			CancellationToken cancellationToken)
 		{
-			var result = new Dictionary<int, string>();
-
 			if (!long.TryParse(
 					companyPermalink,
 					out long permalinkNumber) ||
@@ -68,21 +89,12 @@ namespace SupporTik.Services
 			}
 
 
-			using (var handler = new HttpClientHandler
-			{
-				UseCookies = false
-			})
-			using (var client = new HttpClient(handler))
-			{
-				ConfigureClient(
-					client,
-					cookieHeader);
-
-
 				var info =
 					await FetchCampaignInfoAsync(
-						client,
-						campaignId);
+						HttpClient,
+						cookieHeader,
+						campaignId,
+						cancellationToken);
 
 				if (info == null)
 					return null;
@@ -91,10 +103,10 @@ namespace SupporTik.Services
 				var payload = new JObject
 				{
 					["csrfToken"] =
-						info.Value.CsrfToken,
+						info.CsrfToken,
 
 					["sessionId"] =
-						info.Value.SessionId,
+						info.SessionId,
 
 					["campaignId"] =
 						campaignIdNumber,
@@ -103,37 +115,26 @@ namespace SupporTik.Services
 						new JArray(permalinkNumber),
 
 					["brandingVersion"] =
-						info.Value.Branding,
+						info.Branding,
 
 					["isMulti"] = true
 				};
 
 
-				using (var content =
-					new StringContent(
-						payload.ToString(
-							Formatting.None),
-						Encoding.UTF8,
-						"application/json"))
+				string payloadJson = payload.ToString(Formatting.None);
+				using (var postResponse =
+					await SendAsync(
+						HttpClient,
+						HttpMethod.Post,
+						CalculateBudgetUrl,
+						cookieHeader,
+						() => new StringContent(payloadJson, Encoding.UTF8, "application/json"),
+						cancellationToken))
 				{
-					var postResponse =
-						await client.PostAsync(
-							CalculateBudgetUrl,
-							content);
-
-					if (!postResponse.IsSuccessStatusCode)
-					{
-						string errorBody =
-							await postResponse
-								.Content
-								.ReadAsStringAsync();
-
-						throw new HttpRequestException(
-							$"Status " +
-							$"{(int)postResponse.StatusCode} " +
-							$"{postResponse.StatusCode}: " +
-							errorBody);
-					}
+					HttpRetryPolicy.EnsureSuccess(
+						postResponse,
+						"Не удалось рассчитать стоимость продления.",
+						"BudgetService.CalculateRenewalAmountAsync");
 
 
 					string postBody =
@@ -152,7 +153,7 @@ namespace SupporTik.Services
 						return null;
 
 
-					result[0] =
+					string amount =
 						websubscription
 							["durations"]?
 							[durationDays.ToString()]?
@@ -166,27 +167,21 @@ namespace SupporTik.Services
 							["to"]?
 							.Value<int?>();
 
-					result[1] =
+					string roundedPrediction =
 						prediction.HasValue
 							? RoundToHundreds(
 								prediction.Value)
 							: null;
 
 
-					result[2] =
-						info.Value
-							.IsMulti
-							.ToString();
-
-					result[3] =
-						info.Value
-							.HasBudgetIncreaseButton
-							.ToString();
-
-
-					return result;
+					return new RenewalCalculationResult
+					{
+						Amount = amount,
+						Prediction = roundedPrediction,
+						IsMulti = info.IsMulti,
+						HasBudgetIncreaseButton = info.HasBudgetIncreaseButton
+					};
 				}
-			}
 		}
 
 
@@ -199,25 +194,15 @@ namespace SupporTik.Services
 			bool HasBudgetIncreaseButton)>
 			GetCampaignFlagsAsync(
 				string campaignId,
-				string cookieHeader)
+				string cookieHeader,
+				CancellationToken cancellationToken)
 		{
-			using (var handler =
-				new HttpClientHandler
-				{
-					UseCookies = false
-				})
-			using (var client =
-				new HttpClient(handler))
-			{
-				ConfigureClient(
-					client,
-					cookieHeader);
-
-
 				var info =
 					await FetchCampaignInfoAsync(
-						client,
-						campaignId);
+						HttpClient,
+						cookieHeader,
+						campaignId,
+						cancellationToken);
 
 
 				if (info == null)
@@ -225,10 +210,9 @@ namespace SupporTik.Services
 
 
 				return (
-					info.Value.IsMulti,
-					info.Value.HasBudgetIncreaseButton
+					info.IsMulti,
+					info.HasBudgetIncreaseButton
 				);
-			}
 		}
 
 
@@ -258,16 +242,19 @@ namespace SupporTik.Services
 		///     && !mapsOnlyByPlatforms
 		///     && !arbitrageDisabled
 		/// </summary>
-		private async Task<(
-			string CsrfToken,
-			string SessionId,
-			string Branding,
-			bool IsMulti,
-			bool HasBudgetIncreaseButton)?>
+		private async Task<CampaignInfo>
 			FetchCampaignInfoAsync(
 				HttpClient client,
-				string campaignId)
+				string cookieHeader,
+				string campaignId,
+				CancellationToken cancellationToken)
 		{
+			CampaignInfo cached = TryGetCachedCampaignInfo(cookieHeader, campaignId);
+			if (cached != null)
+			{
+				return cached;
+			}
+
 			// ============================================================
 			// 1. Получаем HTML страницы кампании
 			// ============================================================
@@ -278,9 +265,11 @@ namespace SupporTik.Services
 					campaignId);
 
 
-			string campaignPageHtml =
-				await client.GetStringAsync(
-					campaignPageUrl);
+			string campaignPageHtml = await GetRequiredStringAsync(
+				client,
+				campaignPageUrl,
+				cookieHeader,
+				cancellationToken);
 
 
 			var csrfMatch =
@@ -317,9 +306,11 @@ namespace SupporTik.Services
 			JToken campaignData =
 				await GetCampaignDataAsync(
 					client,
+					cookieHeader,
 					csrfToken,
 					sessionId,
-					campaignId);
+					campaignId,
+					cancellationToken);
 
 
 			if (campaignData == null)
@@ -353,9 +344,11 @@ namespace SupporTik.Services
 			bool upsaleAllowed =
 				await GetUpsaleAllowedAsync(
 					client,
+					cookieHeader,
 					csrfToken,
 					sessionId,
-					campaignId);
+					campaignId,
+					cancellationToken);
 
 
 			// Если API прямо сказал, что upsale запрещён,
@@ -363,13 +356,16 @@ namespace SupporTik.Services
 			// для кнопки уже не требуется.
 			if (!upsaleAllowed)
 			{
-				return (
-					csrfToken,
-					sessionId,
-					branding,
-					isMulti,
-					false
-				);
+				var noUpsaleInfo = new CampaignInfo
+				{
+					CsrfToken = csrfToken,
+					SessionId = sessionId,
+					Branding = branding,
+					IsMulti = isMulti,
+					HasBudgetIncreaseButton = false
+				};
+				StoreCampaignInfo(cookieHeader, campaignId, noUpsaleInfo);
+				return noUpsaleInfo;
 			}
 
 
@@ -402,10 +398,12 @@ namespace SupporTik.Services
 			{
 				arbitrageDisabled =
 					await GetArbitrageDisabledAsync(
-						client,
-						csrfToken,
-						sessionId,
-						businessSnapshotId.Value);
+					client,
+					cookieHeader,
+					csrfToken,
+					sessionId,
+					businessSnapshotId.Value,
+					cancellationToken);
 			}
 
 
@@ -419,13 +417,62 @@ namespace SupporTik.Services
 				!arbitrageDisabled;
 
 
-			return (
-				csrfToken,
-				sessionId,
-				branding,
-				isMulti,
-				hasBudgetIncreaseButton
-			);
+			var info = new CampaignInfo
+			{
+				CsrfToken = csrfToken,
+				SessionId = sessionId,
+				Branding = branding,
+				IsMulti = isMulti,
+				HasBudgetIncreaseButton = hasBudgetIncreaseButton
+			};
+			StoreCampaignInfo(cookieHeader, campaignId, info);
+			return info;
+		}
+
+		private CampaignInfo TryGetCachedCampaignInfo(string cookieHeader, string campaignId)
+		{
+			lock (_cacheLock)
+			{
+				ResetCacheForNewSession(cookieHeader);
+				if (_campaignInfoCache.TryGetValue(campaignId, out CampaignInfoCacheEntry entry))
+				{
+					if (DateTime.UtcNow - entry.StoredAt <= CacheLifetime)
+					{
+						return entry.Value;
+					}
+
+					_campaignInfoCache.Remove(campaignId);
+				}
+			}
+
+			return null;
+		}
+
+		private void StoreCampaignInfo(string cookieHeader, string campaignId, CampaignInfo info)
+		{
+			lock (_cacheLock)
+			{
+				ResetCacheForNewSession(cookieHeader);
+				if (_campaignInfoCache.Count >= MaxCachedCampaigns)
+				{
+					_campaignInfoCache.Clear();
+				}
+
+				_campaignInfoCache[campaignId] = new CampaignInfoCacheEntry
+				{
+					Value = info,
+					StoredAt = DateTime.UtcNow
+				};
+			}
+		}
+
+		private void ResetCacheForNewSession(string cookieHeader)
+		{
+			if (!string.Equals(_cacheCookieHeader, cookieHeader, StringComparison.Ordinal))
+			{
+				_campaignInfoCache.Clear();
+				_cacheCookieHeader = cookieHeader;
+			}
 		}
 
 
@@ -435,9 +482,11 @@ namespace SupporTik.Services
 		private async Task<JToken>
 			GetCampaignDataAsync(
 				HttpClient client,
+				string cookieHeader,
 				string csrfToken,
 				string sessionId,
-				string campaignId)
+				string campaignId,
+				CancellationToken cancellationToken)
 		{
 			string url =
 				$"{GetCampaignUrl}" +
@@ -446,34 +495,17 @@ namespace SupporTik.Services
 				$"&campaignId={Uri.EscapeDataString(campaignId)}";
 
 
-			var response =
-				await client.GetAsync(url);
-
-
-			if (!response.IsSuccessStatusCode)
+			using (var response = await SendAsync(
+				client, HttpMethod.Get, url, cookieHeader, null, cancellationToken))
 			{
-				string errorBody =
-					await response
-						.Content
-						.ReadAsStringAsync();
+				HttpRetryPolicy.EnsureSuccess(
+					response,
+					"Не удалось получить параметры рекламной кампании.",
+					"BudgetService.GetCampaignDataAsync");
 
-				throw new HttpRequestException(
-					$"Status " +
-					$"{(int)response.StatusCode} " +
-					$"{response.StatusCode}: " +
-					errorBody);
+				string body = await response.Content.ReadAsStringAsync();
+				return JObject.Parse(body)["data"];
 			}
-
-
-			string body =
-				await response
-					.Content
-					.ReadAsStringAsync();
-
-
-			return JObject
-				.Parse(body)
-				["data"];
 		}
 
 
@@ -488,9 +520,11 @@ namespace SupporTik.Services
 		private async Task<bool>
 			GetUpsaleAllowedAsync(
 				HttpClient client,
+				string cookieHeader,
 				string csrfToken,
 				string sessionId,
-				string campaignId)
+				string campaignId,
+				CancellationToken cancellationToken)
 		{
 			try
 			{
@@ -501,33 +535,26 @@ namespace SupporTik.Services
 					$"&campaignId={Uri.EscapeDataString(campaignId)}";
 
 
-				var response =
-					await client.GetAsync(url);
+				using (var response = await SendAsync(
+					client, HttpMethod.Get, url, cookieHeader, null, cancellationToken))
+				{
+					if (!response.IsSuccessStatusCode)
+					{
+						return false;
+					}
 
-
-				if (!response.IsSuccessStatusCode)
-					return false;
-
-
-				string body =
-					await response
-						.Content
-						.ReadAsStringAsync();
-
-
-				var data =
-					JObject
-						.Parse(body)
-						["data"];
-
-
-				return data?
-					["upsaleAllowed"]?
-					.Value<bool?>()
-					?? false;
+					string body = await response.Content.ReadAsStringAsync();
+					var data = JObject.Parse(body)["data"];
+					return data?["upsaleAllowed"]?.Value<bool?>() ?? false;
+				}
 			}
-			catch
+			catch (OperationCanceledException)
 			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				LoggingService.LogError("BudgetService.GetUpsaleAllowedAsync", ex);
 				return false;
 			}
 		}
@@ -542,9 +569,11 @@ namespace SupporTik.Services
 		private async Task<bool>
 			GetArbitrageDisabledAsync(
 				HttpClient client,
+				string cookieHeader,
 				string csrfToken,
 				string sessionId,
-				long businessSnapshotId)
+				long businessSnapshotId,
+				CancellationToken cancellationToken)
 		{
 			try
 			{
@@ -555,36 +584,26 @@ namespace SupporTik.Services
 					$"&id={businessSnapshotId}";
 
 
-				var response =
-					await client.GetAsync(url);
-
-
-				if (!response.IsSuccessStatusCode)
+				using (var response = await SendAsync(
+					client, HttpMethod.Get, url, cookieHeader, null, cancellationToken))
 				{
-					return false;
+					if (!response.IsSuccessStatusCode)
+					{
+						return false;
+					}
+
+					string body = await response.Content.ReadAsStringAsync();
+					var data = JObject.Parse(body)["data"];
+					return data?["settings"]?["arbitrageDisabled"]?.Value<bool?>() ?? false;
 				}
-
-
-				string body =
-					await response
-						.Content
-						.ReadAsStringAsync();
-
-
-				var data =
-					JObject
-						.Parse(body)
-						["data"];
-
-
-				return data?
-					["settings"]?
-					["arbitrageDisabled"]?
-					.Value<bool?>()
-					?? false;
 			}
-			catch
+			catch (OperationCanceledException)
 			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				LoggingService.LogError("BudgetService.GetArbitrageDisabledAsync", ex);
 				return false;
 			}
 		}
@@ -757,37 +776,47 @@ namespace SupporTik.Services
 		}
 
 
-		/// <summary>
-		/// Общие настройки HttpClient.
-		/// </summary>
-		private static void ConfigureClient(
+		private static async Task<HttpResponseMessage> SendAsync(
 			HttpClient client,
-			string cookieHeader)
+			HttpMethod method,
+			string url,
+			string cookieHeader,
+			Func<HttpContent> contentFactory,
+			CancellationToken cancellationToken)
 		{
-			if (!string.IsNullOrWhiteSpace(
-				cookieHeader))
+			return await HttpRetryPolicy.SendAsync(
+				client,
+				() =>
+				{
+					var request = new HttpRequestMessage(method, url);
+					if (!string.IsNullOrWhiteSpace(cookieHeader))
+					{
+						request.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
+					}
+
+					request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+					request.Headers.TryAddWithoutValidation("X-Requested-With", "XMLHttpRequest");
+					request.Content = contentFactory?.Invoke();
+					return request;
+				},
+				cancellationToken);
+		}
+
+		private static async Task<string> GetRequiredStringAsync(
+			HttpClient client,
+			string url,
+			string cookieHeader,
+			CancellationToken cancellationToken)
+		{
+			using (var response = await SendAsync(
+				client, HttpMethod.Get, url, cookieHeader, null, cancellationToken))
 			{
-				client
-					.DefaultRequestHeaders
-					.Add(
-						"Cookie",
-						cookieHeader);
+				HttpRetryPolicy.EnsureSuccess(
+					response,
+					"Не удалось получить данные рекламной кампании.",
+					"BudgetService.GetRequiredStringAsync");
+				return await response.Content.ReadAsStringAsync();
 			}
-
-
-			client
-				.DefaultRequestHeaders
-				.Accept
-				.Add(
-					new MediaTypeWithQualityHeaderValue(
-						"application/json"));
-
-
-			client
-				.DefaultRequestHeaders
-				.TryAddWithoutValidation(
-					"X-Requested-With",
-					"XMLHttpRequest");
 		}
 
 

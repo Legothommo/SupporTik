@@ -2,9 +2,6 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SupporTik.Classes
 {
@@ -15,13 +12,19 @@ namespace SupporTik.Classes
 		public void ReplaceRange(IEnumerable<T> items)
 		{
 			_suppress = true;
+			try
+			{
+				Items.Clear();
 
-			Items.Clear();
-
-			foreach (var item in items)
-				Items.Add(item);
-
-			_suppress = false;
+				foreach (var item in items)
+				{
+					Items.Add(item);
+				}
+			}
+			finally
+			{
+				_suppress = false;
+			}
 
 			OnCollectionChanged(
 				new NotifyCollectionChangedEventArgs(
@@ -32,7 +35,9 @@ namespace SupporTik.Classes
 			NotifyCollectionChangedEventArgs e)
 		{
 			if (!_suppress)
+			{
 				base.OnCollectionChanged(e);
+			}
 		}
 	}
 }

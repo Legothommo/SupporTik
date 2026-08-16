@@ -76,8 +76,6 @@ namespace SupporTik.Services
 		}
 
 		private readonly object _lock = new object();
-		private readonly Dictionary<string, HotkeyEntry> _hotkeysByName = new Dictionary<string, HotkeyEntry>();
-
 		// Индекс по сочетанию клавиш — FindMatch дёргается на КАЖДОЕ нажатие в системе
 		// (хук глобальный), поэтому важно, чтобы поиск был O(1), а не перебором всех записей
 		private readonly Dictionary<(Key Key, ModifierKeys Modifiers), HotkeyEntry> _hotkeysByCombo =
@@ -274,32 +272,17 @@ namespace SupporTik.Services
 			return mods;
 		}
 
-		public void RegisterHotkey(string name, Key key, ModifierKeys modifiers, Action action)
+		public void RegisterHotkey(Key key, ModifierKeys modifiers, Action action)
 		{
 			lock (_lock)
 			{
-				// Если по этому имени уже была регистрация на другом сочетании — убираем
-				// её из индекса по сочетанию, иначе там осталась бы битая запись
-				if (_hotkeysByName.TryGetValue(name, out var existing))
+				var combo = (key, modifiers);
+				_hotkeysByCombo[combo] = new HotkeyEntry
 				{
-					_hotkeysByCombo.Remove((existing.Key, existing.Modifiers));
-				}
-
-				var entry = new HotkeyEntry { Key = key, Modifiers = modifiers, Action = action };
-				_hotkeysByName[name] = entry;
-				_hotkeysByCombo[(key, modifiers)] = entry;
-			}
-		}
-
-		public void UnregisterHotkey(string name)
-		{
-			lock (_lock)
-			{
-				if (_hotkeysByName.TryGetValue(name, out var entry))
-				{
-					_hotkeysByCombo.Remove((entry.Key, entry.Modifiers));
-					_hotkeysByName.Remove(name);
-				}
+					Key = key,
+					Modifiers = modifiers,
+					Action = action
+				};
 			}
 		}
 
@@ -307,7 +290,6 @@ namespace SupporTik.Services
 		{
 			lock (_lock)
 			{
-				_hotkeysByName.Clear();
 				_hotkeysByCombo.Clear();
 				_activeTriggerKeys.Clear();
 			}

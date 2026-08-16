@@ -3,303 +3,183 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      xmlns:local="clr-namespace:SupporTik.Pages"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      mc:Ignorable="d"
-      d:DesignHeight="450"
-      d:DesignWidth="800"
-      Title="SettingsPage">
-
+      mc:Ignorable="d" d:DesignHeight="700" d:DesignWidth="1000"
+      Background="{DynamicResource ApplicationBackgroundBrush}" Title="Настройки">
     <Page.Resources>
-        <!-- Стиль подзаголовков секций -->
-        <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
+        <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="SettingTitleStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
             <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="FontWeight" Value="Medium"/>
         </Style>
-
-        <!-- Стиль описания настроек -->
-        <Style x:Key="SettingDescriptionStyle" TargetType="TextBlock">
+        <Style x:Key="DescriptionStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
+        <Style x:Key="CaptureAreaStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource ApplicationBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Focusable" Value="True"/>
+        </Style>
     </Page.Resources>
 
-    <Grid Background="{DynamicResource ApplicationBackgroundBrush}">
-        <ScrollViewer VerticalScrollBarVisibility="Hidden"
-                      HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="24">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28" MaxWidth="1050" HorizontalAlignment="Center">
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Настройки" FontSize="26" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="Поведение приложения, горячие клавиши и обслуживание данных"
+                               Style="{StaticResource DescriptionStyle}" Margin="0,5,0,0"/>
+                </StackPanel>
+                <ui:Button Grid.Column="1" Content="Сохранить" Icon="{ui:SymbolIcon Save24}"
+                           Appearance="Primary" Command="{Binding SaveCommand}"
+                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+            </Grid>
 
-                <!-- Заголовок страницы -->
-                <TextBlock Text="Настройки"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                           FontSize="22"
-                           FontWeight="Bold"
-                           Margin="0,0,0,20"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-                <!-- 1. Секция: Поведение и Запуск -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="ПОВЕДЕНИЕ И ЗАПУСК"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-
-                        <!-- Автозапуск -->
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Запускать вместе с Windows"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           FontSize="14"/>
-                                <TextBlock Text="Автоматический запуск программы при входе в систему"
-                                           Style="{StaticResource SettingDescriptionStyle}"/>
-                            </StackPanel>
-                            <ui:ToggleSwitch x:Name="ChkAutoStart"
-                                             Grid.Column="1"
-                                             VerticalAlignment="Center"
-                                             IsChecked="{Binding AutoStartEnabled, Mode=TwoWay}"/>
-                        </Grid>
-
-                        <Separator Background="{StaticResource BorderSubtleBrush}"
-                                   Margin="0,4,0,12"/>
-
-                        <!-- Сворачивание в трей при закрытии -->
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Сворачивать в трей при закрытии"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           FontSize="14"/>
-                                <TextBlock Text="При нажатии на крестик окно будет скрываться в системный трей"
-                                           Style="{StaticResource SettingDescriptionStyle}"/>
-                            </StackPanel>
-                            <ui:ToggleSwitch x:Name="ChkMinimizeToTray"
-                                             Grid.Column="1"
-                                             VerticalAlignment="Center"
-                                             IsChecked="{Binding MinimizeToTray, Mode=TwoWay}"/>
-                        </Grid>
-
-                        <Separator Background="{StaticResource BorderSubtleBrush}"
-                                   Margin="0,4,0,12"/>
-
-                        <!-- Запуск свернутым -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Запускать в свернутом виде"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           FontSize="14"/>
-                                <TextBlock Text="При старте приложения сразу скрывать его в трей"
-                                           Style="{StaticResource SettingDescriptionStyle}"/>
-                            </StackPanel>
-                            <ui:ToggleSwitch x:Name="ChkStartMinimized"
-                                             Grid.Column="1"
-                                             VerticalAlignment="Center"
-                                             IsChecked="{Binding StartMinimized, Mode=TwoWay}"/>
-                        </Grid>
-                    </StackPanel>
-                </ui:Card>
-
-                <!-- 2. Секция: NDA Замена -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="NDA ЗАМЕНА"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-                        <StackPanel Margin="0,0,0,12">
-                            <TextBlock Text="Сочетание клавиш:"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       FontSize="12"
-                                       Margin="0,0,0,4"/>
-                            <Border x:Name="HotkeyCaptureArea"
-                                    Background="{DynamicResource ApplicationBackgroundBrush}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="6"
-                                    Padding="8"
-                                    Focusable="True"
-                                    MouseDown="HotkeyCaptureArea_MouseDown"
-                                    LostFocus="HotkeyCaptureArea_LostFocus">
-                                <Grid>
-                                    <TextBlock x:Name="TbHotkeyDisplay"
-                                               Text="{Binding NdaHotkeyDisplay}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               FontWeight="SemiBold"/>
-                                </Grid>
-                            </Border>
-                        </StackPanel>
-                    </StackPanel>
-                </ui:Card>
-
-                <!-- 3. Секция: Меню рекламы -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="МЕНЮ РЕКЛАМЫ"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-                        <TextBlock Text="Открывает окно парсинга рекламных кампаний Яндекс.Бизнес"
-                                   Style="{StaticResource SettingDescriptionStyle}"
-                                   Margin="0,0,0,8"/>
+                <StackPanel Grid.Column="0">
+                    <ui:Card Margin="0,0,0,16">
                         <StackPanel>
-                            <TextBlock Text="Сочетание клавиш:"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                       FontSize="12"
-                                       Margin="0,0,0,4"/>
-                            <Border x:Name="MarketingHotkeyCaptureArea"
-                                    Background="{DynamicResource ApplicationBackgroundBrush}"
-                                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="6"
-                                    Padding="8"
-                                    Focusable="True"
-                                    MouseDown="MarketingHotkeyCaptureArea_MouseDown"
-                                    LostFocus="MarketingHotkeyCaptureArea_LostFocus">
-                                <Grid>
-                                    <TextBlock x:Name="TbMarketingHotkeyDisplay"
-                                               Text="{Binding MarketingHotkeyDisplay}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               FontWeight="SemiBold"/>
-                                </Grid>
-                            </Border>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                <ui:SymbolIcon Symbol="Settings24" Margin="0,0,9,0"/>
+                                <TextBlock Text="Приложение" Style="{StaticResource SectionTitleStyle}"/>
+                            </StackPanel>
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Запускать вместе с Windows" Style="{StaticResource SettingTitleStyle}"/>
+                                    <TextBlock Text="Автоматически запускать после входа в систему" Style="{StaticResource DescriptionStyle}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding AutoStartEnabled, Mode=TwoWay}"/>
+                            </Grid>
+                            <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,14"/>
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Сворачивать в трей" Style="{StaticResource SettingTitleStyle}"/>
+                                    <TextBlock Text="Крестик скрывает окно, приложение продолжает работать" Style="{StaticResource DescriptionStyle}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding MinimizeToTray, Mode=TwoWay}"/>
+                            </Grid>
+                            <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,14"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Запускать свёрнутым" Style="{StaticResource SettingTitleStyle}"/>
+                                    <TextBlock Text="При старте сразу скрывать главное окно в трей" Style="{StaticResource DescriptionStyle}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding StartMinimized, Mode=TwoWay}"/>
+                            </Grid>
                         </StackPanel>
+                    </ui:Card>
 
-                        <Separator Background="{StaticResource BorderSubtleBrush}"
-                                   Margin="0,12,0,12"/>
-
-                        <!-- Сторона появления окна -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Открывать слева"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           FontSize="14"/>
-                                <TextBlock Text="Окно меню рекламы выезжает у левого края экрана вместо правого"
-                                           Style="{StaticResource SettingDescriptionStyle}"/>
+                    <ui:Card Margin="0,0,0,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                <ui:SymbolIcon Symbol="ClipboardPaste24" Margin="0,0,9,0"/>
+                                <TextBlock Text="Горячие клавиши" Style="{StaticResource SectionTitleStyle}"/>
                             </StackPanel>
-                            <ui:ToggleSwitch x:Name="ChkMarketingMenuFromLeft"
-                                             Grid.Column="1"
-                                             VerticalAlignment="Center"
-                                             IsChecked="{Binding MarketingMenuFromLeft, Mode=TwoWay}"/>
-                        </Grid>
-                    </StackPanel>
-                </ui:Card>
+                            <TextBlock Text="NDA-замена" Style="{StaticResource SettingTitleStyle}"/>
+                            <TextBlock Text="Нажмите на поле и введите сочетание" Style="{StaticResource DescriptionStyle}" Margin="0,2,0,7"/>
+                            <Border x:Name="HotkeyCaptureArea" Style="{StaticResource CaptureAreaStyle}"
+                                    MouseDown="HotkeyCaptureArea_MouseDown" LostFocus="HotkeyCaptureArea_LostFocus" Margin="0,0,0,16">
+                                <TextBlock x:Name="TbHotkeyDisplay" Text="{Binding NdaHotkeyDisplay}" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="Меню рекламы" Style="{StaticResource SettingTitleStyle}"/>
+                            <TextBlock Text="Открывает поиск рекламных кампаний" Style="{StaticResource DescriptionStyle}" Margin="0,2,0,7"/>
+                            <Border x:Name="MarketingHotkeyCaptureArea" Style="{StaticResource CaptureAreaStyle}"
+                                    MouseDown="MarketingHotkeyCaptureArea_MouseDown" LostFocus="MarketingHotkeyCaptureArea_LostFocus" Margin="0,0,0,14">
+                                <TextBlock x:Name="TbMarketingHotkeyDisplay" Text="{Binding MarketingHotkeyDisplay}" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontWeight="SemiBold"/>
+                            </Border>
+                            <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,14"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Открывать меню слева" Style="{StaticResource SettingTitleStyle}"/>
+                                    <TextBlock Text="По умолчанию окно появляется справа" Style="{StaticResource DescriptionStyle}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding MarketingMenuFromLeft, Mode=TwoWay}"/>
+                            </Grid>
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
 
-                <!-- 4. Секция: Обновления -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="ОБНОВЛЕНИЯ"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Text="Проверка обновлений"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                           FontSize="14"/>
-                                <TextBlock Text="Автоматически проверяется при запуске, но можно и вручную"
-                                           Style="{StaticResource SettingDescriptionStyle}"/>
+                <StackPanel Grid.Column="2">
+                    <ui:Card Margin="0,0,0,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                <ui:SymbolIcon Symbol="ArrowSync24" Margin="0,0,9,0"/>
+                                <TextBlock Text="Данные и обслуживание" Style="{StaticResource SectionTitleStyle}"/>
                             </StackPanel>
-                            <ui:Button Grid.Column="1"
-                                       Content="{Binding CheckUpdatesLabel}"
-                                       Icon="{ui:SymbolIcon ArrowSync24}"
-                                       Appearance="Secondary"
-                                       VerticalAlignment="Center"
-                                       Command="{Binding CheckUpdatesCommand}"/>
-                        </Grid>
-                    </StackPanel>
-                </ui:Card>
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Обновления" Style="{StaticResource SettingTitleStyle}"/>
+                                    <TextBlock Text="Проверка также выполняется при запуске" Style="{StaticResource DescriptionStyle}"/>
+                                </StackPanel>
+                                <ui:Button Grid.Column="1" Content="{Binding CheckUpdatesLabel}" Icon="{ui:SymbolIcon ArrowSync24}"
+                                           Appearance="Secondary" Command="{Binding CheckUpdatesCommand}" Margin="12,0,0,0"/>
+                            </Grid>
+                            <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,14"/>
+                            <TextBlock Text="Перенос данных" Style="{StaticResource SettingTitleStyle}"/>
+                            <TextBlock Text="Выберите данные для экспорта. При импорте изменятся только разделы, которые есть в файле."
+                                       Style="{StaticResource DescriptionStyle}" Margin="0,2,0,10"/>
+                            <WrapPanel Margin="0,0,0,12">
+                                <CheckBox Content="Бинды" IsChecked="{Binding ExportBinds}" Margin="0,0,18,6"/>
+                                <CheckBox Content="Настройки" IsChecked="{Binding ExportSettings}" Margin="0,0,18,6"/>
+                                <CheckBox Content="Рекламные шаблоны" IsChecked="{Binding ExportMarketingTemplates}" Margin="0,0,0,6"/>
+                            </WrapPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <ui:Button Grid.Column="0" Content="Импорт" Icon="{ui:SymbolIcon ArrowImport24}"
+                                           Appearance="Secondary" Command="{Binding ImportCommand}" HorizontalAlignment="Stretch"/>
+                                <ui:Button Grid.Column="2" Content="Экспорт" Icon="{ui:SymbolIcon ArrowExport24}"
+                                           Appearance="Secondary" Command="{Binding ExportCommand}" HorizontalAlignment="Stretch"/>
+                            </Grid>
+                        </StackPanel>
+                    </ui:Card>
 
-                <!-- 5. Секция: Импорт и Экспорт -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="ИМПОРТ И ЭКСПОРТ"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <ui:Button Grid.Column="0"
-                                       Content="Импорт"
-                                       Icon="{ui:SymbolIcon ArrowImport24}"
-                                       Appearance="Secondary"
-                                       HorizontalAlignment="Stretch"
-                                       Margin="0,10,5,10"
-                                       Height="34"
-                                       Command="{Binding ImportCommand}"/>
-                            <ui:Button Grid.Column="1"
-                                       Content="Экспорт"
-                                       Icon="{ui:SymbolIcon ArrowExport24}"
-                                       Appearance="Secondary"
-                                       HorizontalAlignment="Stretch"
-                                       Margin="5,10,0,10"
-                                       Height="34"
-                                       Command="{Binding ExportCommand}"/>
-                        </Grid>
-                    </StackPanel>
-                </ui:Card>
+                    <ui:Card Margin="0,0,0,16">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                <ui:SymbolIcon Symbol="ShieldLock24" Margin="0,0,9,0"/>
+                                <TextBlock Text="Авторизация" Style="{StaticResource SectionTitleStyle}"/>
+                            </StackPanel>
+                            <TextBlock Text="Сбросить сохранённые сессии Яндекс Бизнеса и DataLens. При следующем открытии меню потребуется войти заново."
+                                       Style="{StaticResource DescriptionStyle}" Margin="0,0,0,12"/>
+                            <ui:Button Content="Выйти из аккаунтов" Icon="{ui:SymbolIcon SignOut24}"
+                                       Appearance="Secondary" HorizontalAlignment="Left" Command="{Binding ClearAuthorizationCommand}"/>
+                        </StackPanel>
+                    </ui:Card>
 
-                <!-- 6. Секция: Сброс авторизации -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="АВТОРИЗАЦИЯ"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-
-                        <TextBlock Text="Удалить сохранённую сессию. При следующем открытии меню рекламы потребуется войти заново."
-                                   Style="{StaticResource SettingDescriptionStyle}"
-                                   Margin="0,0,0,8"/>
-
-                        <ui:Button Content="Выйти"
-                                   Icon="{ui:SymbolIcon SignOut24}"
-                                   Appearance="Danger"
-                                   HorizontalAlignment="Stretch"
-                                   Height="34"
-                                   Command="{Binding ClearAuthorizationCommand}"/>
-                    </StackPanel>
-                </ui:Card>
-
-                <!-- 7. Секция: Сброс -->
-                <ui:Card Margin="0,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="СБРОС"
-                                   Style="{StaticResource SectionHeaderStyle}"/>
-                        <TextBlock Text="Вернуть все настройки к значениям по умолчанию. Бинды не затрагиваются."
-                                   Style="{StaticResource SettingDescriptionStyle}"
-                                   Margin="0,0,0,8"/>
-                        <ui:Button Content="Сбросить настройки"
-                                   Icon="{ui:SymbolIcon ArrowReset24}"
-                                   Appearance="Danger"
-                                   HorizontalAlignment="Stretch"
-                                   Height="34"
-                                   Command="{Binding ResetCommand}"/>
-                    </StackPanel>
-                </ui:Card>
-
-                <!-- Кнопка сохранения -->
-                <ui:Button x:Name="BtnSave"
-                           Content="Сохранить настройки"
-                           Icon="{ui:SymbolIcon Save24}"
-                           Appearance="Primary"
-                           HorizontalAlignment="Right"
-                           Command="{Binding SaveCommand}"/>
-            </StackPanel>
-        </ScrollViewer>
-    </Grid>
+                    <ui:Card Margin="0,0,0,16">
+                        <StackPanel>
+                            <TextBlock Text="Сброс настроек" Style="{StaticResource SectionTitleStyle}" Margin="0,0,0,8"/>
+                            <TextBlock Text="Вернуть настройки приложения к исходным значениям. Пользовательские бинды останутся на месте."
+                                       Style="{StaticResource DescriptionStyle}" Margin="0,0,0,12"/>
+                            <ui:Button Content="Сбросить настройки" Icon="{ui:SymbolIcon ArrowReset24}"
+                                       Appearance="Danger" HorizontalAlignment="Left" Command="{Binding ResetCommand}"/>
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

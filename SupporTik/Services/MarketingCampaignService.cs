@@ -14,23 +14,24 @@ namespace SupporTik.Services
 	{
 		private const string CampaignListApiUrl = "https://yandex.ru/business/priority/api/campaign-list/get";
 		private const int PageSize = 20;
+		private const int MaxConcurrentPages = 6;
+		private static readonly HttpClient HttpClient = new HttpClient(
+			new HttpClientHandler { UseCookies = false });
 
 		// Ссылка "Открыть" на карточке
 		private const string CampaignOpenUrlTemplate = "https://yandex.ru/business/subscription/campaign/{0}";
 
-		public async Task<List<MarketingItem>> SearchAsync(string uid, YandexBusinessAuth auth, IProgress<string> progress)
+		public async Task<List<MarketingItem>> SearchAsync(
+			string uid,
+			YandexBusinessAuth auth,
+			IProgress<string> progress,
+			CancellationToken cancellationToken)
 		{
 			// UseCookies = false обязателен: с включённым (по умолчанию) CookieContainer
 			// HttpClient сам управляет куками и путается с вручную выставленным заголовком
 			// Cookie — сервер в ответ отвечал "Invalid csrf token", хотя сам токен был верным
-			using (var handler = new HttpClientHandler { UseCookies = false })
-			using (var client = new HttpClient(handler))
-			{
-				client.DefaultRequestHeaders.Add("Cookie", auth.CookieHeader);
-				client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
 				progress?.Report("Страница 1...");
-				var (firstItems, total) = await FetchPageAsync(client, uid, auth, offset: 0);
+				var (firstItems, total) = await FetchPageAsync(uid, auth, offset: 0, cancellationToken);
 
 				var allItems = new List<MarketingItem>(firstItems);
 
@@ -51,15 +52,27 @@ namespace SupporTik.Services
 				int totalPages = remainingOffsets.Count + 1;
 				int completedPages = 1;
 
-				var pageTasks = remainingOffsets.Select(async offset =>
+				(List<MarketingItem> Items, int Total)[] pages;
+				using (var throttle = new SemaphoreSlim(MaxConcurrentPages))
 				{
-					var page = await FetchPageAsync(client, uid, auth, offset);
-					int done = Interlocked.Increment(ref completedPages);
-					progress?.Report($"Страница {done}/{totalPages}...");
-					return page;
-				});
+					var pageTasks = remainingOffsets.Select(async offset =>
+					{
+						await throttle.WaitAsync(cancellationToken);
+						try
+						{
+							var page = await FetchPageAsync(uid, auth, offset, cancellationToken);
+							int done = Interlocked.Increment(ref completedPages);
+							progress?.Report($"Страница {done}/{totalPages}...");
+							return page;
+						}
+						finally
+						{
+							throttle.Release();
+						}
+					});
 
-				var pages = await Task.WhenAll(pageTasks);
+					pages = await Task.WhenAll(pageTasks);
+				}
 
 				foreach (var page in pages)
 				{
@@ -67,11 +80,13 @@ namespace SupporTik.Services
 				}
 
 				return allItems;
-			}
 		}
 
 		private async Task<(List<MarketingItem> Items, int Total)> FetchPageAsync(
-			HttpClient client, string uid, YandexBusinessAuth auth, int offset)
+			string uid,
+			YandexBusinessAuth auth,
+			int offset,
+			CancellationToken cancellationToken)
 		{
 			string url = $"{CampaignListApiUrl}?csrfToken={Uri.EscapeDataString(auth.CsrfToken)}" +
 				$"&sessionId={Uri.EscapeDataString(auth.SessionId)}" +
@@ -79,16 +94,24 @@ namespace SupporTik.Services
 				$"&userUid={Uri.EscapeDataString(uid)}" +
 				$"&managerUid={Uri.EscapeDataString(auth.ManagerUid)}";
 
-			var response = await client.GetAsync(url);
-
-			if (!response.IsSuccessStatusCode)
+			using (var response = await HttpRetryPolicy.SendAsync(
+				HttpClient,
+				() =>
+				{
+					var request = new HttpRequestMessage(HttpMethod.Get, url);
+					request.Headers.TryAddWithoutValidation("Cookie", auth.CookieHeader);
+					request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+					return request;
+				},
+				cancellationToken))
 			{
-				string errorBody = await response.Content.ReadAsStringAsync();
-				throw new HttpRequestException($"Status {(int)response.StatusCode} {response.StatusCode}: {errorBody}");
-			}
+				HttpRetryPolicy.EnsureSuccess(
+					response,
+					"Не удалось получить список рекламных кампаний.",
+					"MarketingCampaignService.FetchPageAsync");
 
-			string body = await response.Content.ReadAsStringAsync();
-			var data = JObject.Parse(body)["data"];
+				string body = await response.Content.ReadAsStringAsync();
+				var data = JObject.Parse(body)["data"];
 
 			int total = data?["total"]?.Value<int>() ?? 0;
 			var results = data?["result"] as JArray;
@@ -102,7 +125,8 @@ namespace SupporTik.Services
 				}
 			}
 
-			return (items, total);
+				return (items, total);
+			}
 		}
 
 		private static MarketingItem ParseCampaign(JToken campaign, string uid)
