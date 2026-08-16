@@ -339,6 +339,13 @@ namespace SupporTik.ViewModels
 			_operationCancellation?.Cancel();
 		}
 
+		private bool IsCurrentOperation(CancellationToken cancellationToken)
+		{
+			return !cancellationToken.IsCancellationRequested &&
+				_operationCancellation != null &&
+				_operationCancellation.Token == cancellationToken;
+		}
+
 		private void EndOperation(CancellationToken cancellationToken)
 		{
 			if (_operationCancellation == null || _operationCancellation.Token != cancellationToken)
@@ -559,7 +566,11 @@ namespace SupporTik.ViewModels
 
 				_forceRefreshYandexAuth = false;
 
-				var progress = new Progress<string>(text => SearchButtonLabel = text);
+				var progress = new Progress<string>(text =>
+				{
+					if (IsCurrentOperation(cancellationToken))
+						SearchButtonLabel = text;
+				});
 				List<MarketingItem> items = await _campaignService.SearchAsync(uid, auth, progress, cancellationToken);
 
 				AddRecentUid(uid);
@@ -711,7 +722,11 @@ namespace SupporTik.ViewModels
 
 			try
 			{
-				var progress = new Progress<string>(text => UpsaleButtonLabel = text);
+				var progress = new Progress<string>(text =>
+				{
+					if (IsCurrentOperation(cancellationToken))
+						UpsaleButtonLabel = text;
+				});
 				await CheckUpsalesForItemsAsync(selected, progress, cancellationToken);
 			}
 			catch (OperationCanceledException)
